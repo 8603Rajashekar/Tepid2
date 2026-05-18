@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Start-Sleep -Seconds 4; \\(Invoke-WebRequest -Uri \"http://127.0.0.1:8000/api/v1/health\" -UseBasicParsing -ErrorAction SilentlyContinue\\).StatusCode)"
+    ]
+  }
+}
