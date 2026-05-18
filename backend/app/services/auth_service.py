@@ -10,7 +10,7 @@ from app.core.security import (
 )
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
+from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse, UserInfo
 
 
 class AuthService:
@@ -49,6 +49,7 @@ class AuthService:
         return TokenResponse(
             access_token=create_access_token(token_data),
             refresh_token=create_refresh_token(token_data),
+            user=UserInfo(id=user.id, email=user.email, full_name=user.full_name, roles=roles),
         )
 
     @staticmethod
@@ -78,7 +79,14 @@ class AuthService:
             "roles": data.get("roles", []),
         }
 
+        roles = data.get("roles", [])
         return TokenResponse(
             access_token=create_access_token(token_data),
             refresh_token=create_refresh_token(token_data),
+            user=UserInfo(
+                id=data["sub"],
+                email=data["email"],
+                full_name=data["full_name"],
+                roles=roles,
+            ),
         )
