@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user
 from app.core.security import TokenUser
 from app.db.session import get_db
-from app.modules.tasks.schema import CheckInRequest, TaskCreate, TaskResponse, TaskUpdate
+from app.modules.tasks.schema import TaskApproval, TaskCreate, TaskResponse, TaskStatusUpdate, TaskUpdate
 from app.modules.tasks.service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -56,11 +56,21 @@ async def update_task(
     return await TaskService.update_task(db, task_id, data, current_user)
 
 
-@router.post("/{task_id}/check-in", response_model=TaskResponse)
-async def check_in(
+@router.patch("/{task_id}/status", response_model=TaskResponse)
+async def update_status(
     task_id: UUID,
-    data: CheckInRequest,
+    data: TaskStatusUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    return await TaskService.check_in(db, task_id, data, current_user)
+    return await TaskService.update_status(db, task_id, data, current_user)
+
+
+@router.post("/{task_id}/approve", response_model=TaskResponse)
+async def approve_task(
+    task_id: UUID,
+    data: TaskApproval,
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+):
+    return await TaskService.approve_task(db, task_id, data, current_user)

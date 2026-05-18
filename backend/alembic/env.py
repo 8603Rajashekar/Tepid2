@@ -21,6 +21,7 @@ from app.models.role import Role, UserRole  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.modules.tasks.model import Task  # noqa: F401
 from app.modules.tracking.model import TaskLocation  # noqa: F401
+from app.modules.service_calls.model import ServiceCall  # noqa: F401
 
 target_metadata = Base.metadata
 
