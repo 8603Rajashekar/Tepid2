@@ -17,14 +17,18 @@ export default function Login({ onLogin }) {
       );
       const { access_token, user } = res.data;
       const primaryRole = user.roles[0] || "agent";
-
       localStorage.setItem("token", access_token);
       localStorage.setItem("role", primaryRole);
       localStorage.setItem("user", JSON.stringify(user));
-
       onLogin(access_token, primaryRole);
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
+      if (err.response) {
+        setError(err.response?.data?.detail || `Server error ${err.response.status}`);
+      } else if (err.request) {
+        setError(`Cannot reach backend at ${process.env.REACT_APP_API_URL} — is the server running?`);
+      } else {
+        setError(err.message || "Login failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -33,56 +37,66 @@ export default function Login({ onLogin }) {
   const handleKeyDown = (e) => { if (e.key === "Enter") handleLogin(); };
 
   return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      height: "100vh", background: "#f1f5f9",
-    }}>
-      <div style={{
-        background: "white", padding: "40px 48px", borderRadius: 12,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.1)", minWidth: 340,
-      }}>
-        <h2 style={{ margin: "0 0 8px", fontSize: 22 }}>Field Ops Platform</h2>
-        <p style={{ margin: "0 0 28px", color: "#64748b", fontSize: 14 }}>
-          Sign in to your dashboard
-        </p>
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-10">
 
-        <label style={labelStyle}>Email</label>
-        <input
-          style={inputStyle} type="email" placeholder="admin@company.com"
-          value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={handleKeyDown}
-        />
+        {/* Logo / Brand */}
+        <div className="flex items-center gap-2 mb-8">
+          <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            </svg>
+          </div>
+          <span className="text-lg font-bold text-slate-800">Field Ops Platform</span>
+        </div>
 
-        <label style={labelStyle}>Password</label>
-        <input
-          style={inputStyle} type="password" placeholder="••••••••"
-          value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={handleKeyDown}
-        />
+        <h2 className="text-2xl font-bold text-slate-800 mb-1">Welcome back</h2>
+        <p className="text-sm text-slate-500 mb-7">Sign in to your dashboard</p>
 
-        {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "0 0 16px" }}>{error}</p>}
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email</label>
+            <input
+              type="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="mt-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+            {error}
+          </div>
+        )}
 
         <button
-          style={{
-            width: "100%", padding: "10px 0",
-            background: loading ? "#94a3b8" : "#3b82f6",
-            color: "white", border: "none", borderRadius: 8,
-            fontSize: 15, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
-          }}
-          onClick={handleLogin} disabled={loading}
+          onClick={handleLogin}
+          disabled={loading}
+          className="mt-6 w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-semibold rounded-lg text-sm transition cursor-pointer disabled:cursor-not-allowed"
         >
           {loading ? "Signing in…" : "Sign In"}
         </button>
 
-        <p style={{ marginTop: 20, fontSize: 12, color: "#94a3b8", textAlign: "center" }}>
+        <p className="mt-6 text-center text-xs text-slate-400">
           admin / manager / agent@company.com
         </p>
       </div>
     </div>
   );
 }
-
-const labelStyle = { display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 };
-const inputStyle = {
-  width: "100%", padding: "9px 12px", marginBottom: 18,
-  border: "1px solid #e2e8f0", borderRadius: 8, fontSize: 14,
-  boxSizing: "border-box", outline: "none",
-};

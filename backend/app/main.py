@@ -4,7 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.modules.analytics.router import router as analytics_router
+from app.modules.documents.router import router as documents_router
+from app.modules.expenses.router import router as expenses_router
 from app.modules.service_calls.router import router as service_calls_router
+from app.modules.work_reports.router import router as work_reports_router
 from app.modules.auth.router import router as auth_router
 from app.modules.health.router import router as health_router
 from app.modules.tasks.router import router as tasks_router
@@ -37,6 +40,9 @@ def create_app() -> FastAPI:
     app.include_router(tracking_router, prefix=settings.API_V1_PREFIX)
     app.include_router(analytics_router, prefix=settings.API_V1_PREFIX)
     app.include_router(service_calls_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(expenses_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(documents_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(work_reports_router, prefix=settings.API_V1_PREFIX)
 
     return app
 

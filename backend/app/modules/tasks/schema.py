@@ -1,12 +1,12 @@
 from datetime import datetime
-from uuid import UUID
-from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, Field, field_validator
 
 from app.modules.tasks.model import TaskPriority, TaskStatus
 
 
-# 🔹 CREATE
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
@@ -16,13 +16,12 @@ class TaskCreate(BaseModel):
 
     @field_validator("due_date")
     @classmethod
-    def validate_due_date(cls, v: datetime):
+    def validate_due_date(cls, v: datetime) -> datetime:
         if v <= datetime.utcnow():
             raise ValueError("due_date must be in the future")
         return v
 
 
-# 🔹 UPDATE
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=5, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
@@ -32,39 +31,47 @@ class TaskUpdate(BaseModel):
 
     @field_validator("due_date")
     @classmethod
-    def validate_due_date(cls, v: datetime | None):
+    def validate_due_date(cls, v: datetime | None) -> datetime | None:
         if v is not None and v <= datetime.utcnow():
             raise ValueError("due_date must be in the future")
         return v
 
 
-# 🔹 STATUS UPDATE
+class TaskAssign(BaseModel):
+    assigned_to: UUID
+
+
+class TaskReject(BaseModel):
+    rejection_reason: str = Field(..., min_length=5, max_length=1000)
+
+
+# Kept for backward-compat with the generic PATCH /status endpoint
 class TaskStatusUpdate(BaseModel):
     status: TaskStatus
     note: Optional[str] = None
 
 
-# 🔹 APPROVAL
+# Kept for backward-compat — new code uses dedicated endpoints
 class TaskApproval(BaseModel):
-    action: str  # "approved" or "rejected"
-    rejection_reason: Optional[str] = None
+    action: str
 
     @field_validator("action")
     @classmethod
-    def validate_action(cls, v):
-        if v not in ["approved", "rejected"]:
+    def validate_action(cls, v: str) -> str:
+        if v not in {"approved", "rejected"}:
             raise ValueError("action must be 'approved' or 'rejected'")
         return v
 
+    rejection_reason: Optional[str] = None
+
     @field_validator("rejection_reason")
     @classmethod
-    def validate_reason(cls, v, info):
+    def validate_reason(cls, v: Optional[str], info) -> Optional[str]:
         if info.data.get("action") == "rejected" and not v:
             raise ValueError("rejection_reason is required when rejecting")
         return v
 
 
-# 🔹 RESPONSE
 class TaskResponse(BaseModel):
     id: UUID
     title: str
@@ -79,6 +86,9 @@ class TaskResponse(BaseModel):
     approved_by: Optional[UUID]
     approved_at: Optional[datetime]
     rejection_reason: Optional[str]
+
+    delay_minutes: Optional[int]
+    efficiency_score: Optional[float]
 
     created_at: datetime
     updated_at: datetime

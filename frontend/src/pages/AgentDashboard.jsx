@@ -2,27 +2,102 @@ import { useEffect, useState } from "react";
 
 const API = `${process.env.REACT_APP_API_URL}/api/v1`;
 
-const STATUS_COLORS = {
-  new: "#94a3b8", assigned: "#f59e0b", in_progress: "#3b82f6",
-  pending_review: "#8b5cf6", approved: "#22c55e", rejected: "#ef4444",
+const STATUS_STYLES = {
+  new:            { bg: "bg-slate-100",   text: "text-slate-600" },
+  assigned:       { bg: "bg-amber-100",   text: "text-amber-700" },
+  in_progress:    { bg: "bg-blue-100",    text: "text-blue-700" },
+  pending_review: { bg: "bg-purple-100",  text: "text-purple-700" },
+  approved:       { bg: "bg-green-100",   text: "text-green-700" },
+  rejected:       { bg: "bg-red-100",     text: "text-red-700" },
 };
 
-const PRIORITY_COLORS = { critical: "#ef4444", high: "#f97316", normal: "#3b82f6", low: "#94a3b8" };
+const PRIORITY_STYLES = {
+  critical: { bg: "bg-red-100",    text: "text-red-700",    dot: "bg-red-500" },
+  high:     { bg: "bg-orange-100", text: "text-orange-700", dot: "bg-orange-500" },
+  normal:   { bg: "bg-blue-100",   text: "text-blue-700",   dot: "bg-blue-500" },
+  low:      { bg: "bg-slate-100",  text: "text-slate-600",  dot: "bg-slate-400" },
+};
 
 const NEXT_STATUS = {
-  new: null, assigned: "in_progress", in_progress: "pending_review", pending_review: null, approved: null, rejected: null,
+  assigned: "in_progress", in_progress: "pending_review",
 };
 
-const NEXT_LABEL = { assigned: "Start", in_progress: "Submit for Review" };
+const NEXT_LABEL = {
+  assigned: "Start Task", in_progress: "Submit for Review",
+};
+
+function TaskCard({ task, onAdvance, advancing }) {
+  const ss = STATUS_STYLES[task.status] || STATUS_STYLES.new;
+  const ps = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.normal;
+  const nextStatus = NEXT_STATUS[task.status];
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-slate-800 mb-1 truncate">{task.title}</h3>
+          {task.description && (
+            <p className="text-sm text-slate-500 mb-3 line-clamp-2">{task.description}</p>
+          )}
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${ss.bg} ${ss.text}`}>
+              {task.status.replace(/_/g, " ")}
+            </span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${ps.bg} ${ps.text}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${ps.dot}`} />
+              {task.priority}
+            </span>
+            <span className="text-xs text-slate-400">
+              Due {new Date(task.due_date).toLocaleDateString()}
+            </span>
+          </div>
+          {task.rejection_reason && (
+            <div className="mt-3 px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-sm text-red-600">
+              <span className="font-semibold">Rejected: </span>{task.rejection_reason}
+            </div>
+          )}
+        </div>
+        {nextStatus && (
+          <button
+            onClick={() => onAdvance(task)}
+            disabled={advancing === task.id}
+            className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-semibold transition
+              ${task.status === "assigned"
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-purple-600 hover:bg-purple-700 text-white"}
+              disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {advancing === task.id ? "…" : NEXT_LABEL[task.status]}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, tasks, color, onAdvance, advancing }) {
+  if (tasks.length === 0) return null;
+  return (
+    <div>
+      <div className={`flex items-center gap-2 mb-3`}>
+        <h2 className={`text-sm font-semibold ${color}`}>{title}</h2>
+        <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{tasks.length}</span>
+      </div>
+      <div className="space-y-3">
+        {tasks.map(t => <TaskCard key={t.id} task={t} onAdvance={onAdvance} advancing={advancing} />)}
+      </div>
+    </div>
+  );
+}
 
 export default function AgentDashboard({ onLogout }) {
   const token = localStorage.getItem("token");
   const user  = JSON.parse(localStorage.getItem("user") || "{}");
-  const [tasks, setTasks]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(null);
+  const [tasks, setTasks]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [advancing, setAdvancing] = useState(null);
 
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
   const loadTasks = () => {
     fetch(`${API}/tasks/my`, { headers: { Authorization: `Bearer ${token}` } })
@@ -31,125 +106,97 @@ export default function AgentDashboard({ onLogout }) {
       .catch(() => setLoading(false));
   };
 
-  useEffect(() => { loadTasks(); }, [token]);
+  useEffect(() => { loadTasks(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const advanceStatus = async (task) => {
     const next = NEXT_STATUS[task.status];
     if (!next) return;
-    setUpdating(task.id);
+    setAdvancing(task.id);
     try {
       await fetch(`${API}/tasks/${task.id}/status`, {
         method: "PATCH",
-        headers,
+        headers: authHeaders,
         body: JSON.stringify({ status: next }),
       });
       loadTasks();
-    } catch (e) {
+    } catch {
       alert("Failed to update status");
     } finally {
-      setUpdating(null);
+      setAdvancing(null);
     }
   };
 
-  const active  = tasks.filter(t => ["assigned", "in_progress"].includes(t.status));
-  const review  = tasks.filter(t => t.status === "pending_review");
-  const done    = tasks.filter(t => ["approved", "rejected"].includes(t.status));
-
-  const TaskCard = ({ task }) => (
-    <div style={{ background: "white", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{task.title}</div>
-          {task.description && <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>{task.description}</div>}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ background: STATUS_COLORS[task.status] + "20", color: STATUS_COLORS[task.status], padding: "2px 8px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-              {task.status.replace("_", " ")}
-            </span>
-            <span style={{ background: PRIORITY_COLORS[task.priority] + "20", color: PRIORITY_COLORS[task.priority], padding: "2px 8px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-              {task.priority}
-            </span>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>Due: {new Date(task.due_date).toLocaleDateString()}</span>
-          </div>
-          {task.rejection_reason && (
-            <div style={{ marginTop: 8, padding: "8px 12px", background: "#fef2f2", borderRadius: 8, fontSize: 13, color: "#dc2626" }}>
-              Rejected: {task.rejection_reason}
-            </div>
-          )}
-        </div>
-        {NEXT_STATUS[task.status] && (
-          <button
-            onClick={() => advanceStatus(task)}
-            disabled={updating === task.id}
-            style={{
-              marginLeft: 16, padding: "8px 16px", background: "#3b82f6", color: "white",
-              border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600,
-              opacity: updating === task.id ? 0.6 : 1,
-            }}
-          >
-            {updating === task.id ? "…" : NEXT_LABEL[task.status]}
-          </button>
-        )}
-      </div>
-    </div>
-  );
+  const active = tasks.filter(t => ["assigned", "in_progress"].includes(t.status));
+  const review = tasks.filter(t => t.status === "pending_review");
+  const done   = tasks.filter(t => ["approved", "rejected"].includes(t.status));
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc" }}>
+    <div className="flex h-screen overflow-hidden bg-slate-50">
 
       {/* Sidebar */}
-      <div style={{ width: 220, background: "#1e293b", color: "white", padding: "24px 16px", display: "flex", flexDirection: "column" }}>
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>Field Ops</div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>Agent Panel</div>
+      <aside className="w-56 bg-slate-900 text-white flex flex-col flex-shrink-0">
+        <div className="px-5 py-6 border-b border-slate-700">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-bold">Field Ops</div>
+              <div className="text-xs text-slate-400">Agent Panel</div>
+            </div>
+          </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ padding: "8px 12px", fontSize: 13, color: "#94a3b8" }}>Active: {active.length}</div>
-          <div style={{ padding: "8px 12px", fontSize: 13, color: "#94a3b8" }}>In Review: {review.length}</div>
-          <div style={{ padding: "8px 12px", fontSize: 13, color: "#94a3b8" }}>Completed: {done.filter(t => t.status === "approved").length}</div>
+        <div className="flex-1 px-4 py-4 space-y-1">
+          <div className="px-3 py-2 flex items-center justify-between text-sm text-slate-400">
+            <span>Active</span>
+            <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full">{active.length}</span>
+          </div>
+          <div className="px-3 py-2 flex items-center justify-between text-sm text-slate-400">
+            <span>In Review</span>
+            <span className="bg-purple-600 text-white text-xs px-2 py-0.5 rounded-full">{review.length}</span>
+          </div>
+          <div className="px-3 py-2 flex items-center justify-between text-sm text-slate-400">
+            <span>Completed</span>
+            <span className="bg-green-600 text-white text-xs px-2 py-0.5 rounded-full">{done.filter(t => t.status === "approved").length}</span>
+          </div>
         </div>
-        <div style={{ borderTop: "1px solid #334155", paddingTop: 16 }}>
-          <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 8 }}>{user.full_name || user.email}</div>
-          <button onClick={onLogout} style={{ background: "none", border: "1px solid #475569", color: "#94a3b8", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 13, width: "100%" }}>
+        <div className="px-5 py-4 border-t border-slate-700">
+          <div className="text-xs text-slate-400 mb-3 truncate">{user.full_name || user.email}</div>
+          <button onClick={onLogout} className="w-full text-xs text-slate-400 border border-slate-600 hover:border-slate-400 hover:text-slate-200 py-1.5 rounded-lg transition">
             Sign out
           </button>
         </div>
-      </div>
+      </aside>
 
       {/* Main */}
-      <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
-        <h1 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 700 }}>My Tasks</h1>
+      <main className="flex-1 overflow-auto">
+        <div className="sticky top-0 bg-slate-50 border-b border-slate-200 px-6 py-4">
+          <h1 className="text-xl font-bold text-slate-800">My Tasks</h1>
+        </div>
 
-        {loading ? <div style={{ color: "#94a3b8" }}>Loading…</div> : (
-          <>
-            {active.length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontWeight: 600, marginBottom: 12, color: "#374151" }}>Active ({active.length})</div>
-                {active.map(t => <TaskCard key={t.id} task={t} />)}
+        <div className="px-6 py-5">
+          {loading ? (
+            <div className="text-sm text-slate-400 text-center py-16">Loading your tasks…</div>
+          ) : tasks.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
               </div>
-            )}
-
-            {review.length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontWeight: 600, marginBottom: 12, color: "#7e22ce" }}>Pending Review ({review.length})</div>
-                {review.map(t => <TaskCard key={t.id} task={t} />)}
-              </div>
-            )}
-
-            {done.length > 0 && (
-              <div>
-                <div style={{ fontWeight: 600, marginBottom: 12, color: "#64748b" }}>Completed ({done.length})</div>
-                {done.map(t => <TaskCard key={t.id} task={t} />)}
-              </div>
-            )}
-
-            {tasks.length === 0 && (
-              <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8" }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>No tasks assigned yet</div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+              <p className="text-slate-400 text-sm">No tasks assigned yet</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <Section title="Active" tasks={active} color="text-blue-700" onAdvance={advanceStatus} advancing={advancing} />
+              <Section title="Pending Review" tasks={review} color="text-purple-700" onAdvance={advanceStatus} advancing={advancing} />
+              <Section title="Completed" tasks={done} color="text-slate-500" onAdvance={advanceStatus} advancing={advancing} />
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

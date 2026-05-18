@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String, Text, DateTime, Enum, ForeignKey
+from sqlalchemy import Float, Integer, String, Text, DateTime, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -89,10 +89,11 @@ class Task(Base):
         nullable=True,
     )
 
-    rejection_reason: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True,
-    )
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # 📊 Efficiency Scoring
+    delay_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    efficiency_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # 📊 Audit Fields
     created_at: Mapped[datetime] = mapped_column(
