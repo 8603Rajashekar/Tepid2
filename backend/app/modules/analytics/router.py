@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from app.core.dependencies import get_current_user
 from app.core.security import TokenUser
 from app.db.session import get_db
-from app.modules.service_calls.model import ServiceCall, ServiceCallStatus
+from app.modules.service_calls.model import ServiceCall, ServiceStatus
 from app.modules.tasks.model import Task, TaskStatus
 from app.modules.tracking.model import TaskLocation
 
@@ -87,12 +87,13 @@ async def get_service_call_metrics(
     db: AsyncSession = Depends(get_db),
     _: TokenUser = Depends(get_current_user),
 ):
-    total    = await db.scalar(select(func.count()).select_from(ServiceCall))
-    open_    = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceCallStatus.open))
-    assigned = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceCallStatus.assigned))
-    in_prog  = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceCallStatus.in_progress))
-    resolved = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceCallStatus.resolved))
-    closed   = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceCallStatus.closed))
+    total      = await db.scalar(select(func.count()).select_from(ServiceCall))
+    pending    = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceStatus.pending_assignment))
+    assigned   = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceStatus.assigned))
+    in_prog    = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceStatus.in_progress))
+    escalated  = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceStatus.escalated))
+    resolved   = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceStatus.resolved))
+    closed     = await db.scalar(select(func.count()).select_from(ServiceCall).where(ServiceCall.status == ServiceStatus.closed))
 
     avg_resolution = await db.scalar(
         select(
@@ -105,9 +106,10 @@ async def get_service_call_metrics(
     return {
         "service_calls": {
             "total": total,
-            "open": open_,
+            "pending_assignment": pending,
             "assigned": assigned,
             "in_progress": in_prog,
+            "escalated": escalated,
             "resolved": resolved,
             "closed": closed,
         },

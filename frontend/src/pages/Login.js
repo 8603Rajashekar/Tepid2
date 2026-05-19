@@ -93,9 +93,27 @@ export default function Login({ onLogin }) {
           {loading ? "Signing in…" : "Sign In"}
         </button>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
-          admin / manager / agent@company.com
-        </p>
+        <div className="mt-6 border-t border-slate-100 pt-4 space-y-1">
+          <p className="text-xs text-slate-400 text-center font-medium mb-2">Test accounts</p>
+          {[
+            ["super_admin@company.com", "SuperAdmin@1234"],
+            ["admin@company.com",       "Admin@1234"],
+            ["supervisor@company.com",  "Supervisor@1234"],
+            ["coordinator@company.com", "Coordinator@1234"],
+            ["finance@company.com",     "Finance@1234"],
+            ["employee@company.com",    "Employee@1234"],
+            ["viewer@company.com",      "Viewer@1234"],
+          ].map(([e, p]) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => { setEmail(e); setPassword(p); }}
+              className="w-full text-left text-xs px-2 py-1 rounded hover:bg-slate-50 text-slate-500 transition font-mono"
+            >
+              {e}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
