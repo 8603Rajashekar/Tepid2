@@ -1,91 +1,88 @@
 import { useEffect, useState } from "react";
-import StatCard from "../components/StatCard";
-import { TaskPieChart, AgentBarChart } from "../components/Charts";
-import api from "../services/api";
+import api from "../api/api";
+import Card from "../components/Card";
 
 export default function Dashboard() {
-  const [overview, setOverview]     = useState(null);
-  const [agentPerf, setAgentPerf]   = useState([]);
-  const [svcMetrics, setSvcMetrics] = useState(null);
-  const [loading, setLoading]       = useState(true);
-
-  const load = async () => {
-    try {
-      const [ov, ap, sc] = await Promise.all([
-        api.get("/analytics/overview"),
-        api.get("/analytics/agent-performance"),
-        api.get("/analytics/service-calls"),
-      ]);
-      setOverview(ov.data.tasks);
-      setAgentPerf(ap.data.agent_performance || []);
-      setSvcMetrics(sc.data.service_calls);
-    } catch {
-      // 401 handled by api interceptor
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [tasks,  setTasks]  = useState(null);
+  const [calls,  setCalls]  = useState(null);
+  const [agents, setAgents] = useState([]);
+  const [error,  setError]  = useState(null);
 
   useEffect(() => {
+    const load = () =>
+      Promise.all([
+        api.get("/analytics/overview"),
+        api.get("/analytics/service-calls"),
+        api.get("/analytics/agent-performance"),
+      ])
+        .then(([ov, sc, ap]) => {
+          setTasks(ov.data.tasks);
+          setCalls(sc.data.service_calls);
+          setAgents(ap.data.agent_performance || []);
+        })
+        .catch(() => setError("Failed to load analytics"));
+
     load();
     const id = setInterval(load, 15000);
     return () => clearInterval(id);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
-        Loading analytics…
-      </div>
-    );
-  }
-
-  const kpis = [
-    { title: "Total Tasks",    value: overview?.total,          color: "blue"   },
-    { title: "In Progress",    value: overview?.in_progress,    color: "yellow" },
-    { title: "Pending Review", value: overview?.pending_review, color: "purple" },
-    { title: "Approved",       value: overview?.approved,       color: "green"  },
-    { title: "Rejected",       value: overview?.rejected,       color: "red"    },
-    { title: "Service Calls",  value: svcMetrics?.total,        color: "orange" },
-  ];
+  if (error) return <p className="text-red-500 text-sm">{error}</p>;
+  if (!tasks) return <p className="text-slate-400 text-sm animate-pulse">Loading…</p>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-slate-800">Analytics Dashboard</h1>
+      <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        {kpis.map((k) => (
-          <StatCard key={k.title} title={k.title} value={k.value} color={k.color} />
-        ))}
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4">Task Status Breakdown</h3>
-          <TaskPieChart tasks={overview} />
+      {/* Tasks */}
+      <section>
+        <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Tasks Overview</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Card title="Total"          value={tasks.total}          color="slate"  />
+          <Card title="In Progress"    value={tasks.in_progress}    color="blue"   />
+          <Card title="Pending Review" value={tasks.pending_review} color="yellow" />
+          <Card title="Approved"       value={tasks.approved}       color="green"  />
         </div>
+      </section>
 
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4">Agent Performance</h3>
-          <AgentBarChart agents={agentPerf} />
-        </div>
-      </div>
-
-      {/* Service call summary row */}
-      {svcMetrics && (
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4">Service Call Breakdown</h3>
-          <div className="grid grid-cols-5 gap-3">
-            {["open", "assigned", "in_progress", "resolved", "closed"].map((s) => (
-              <div key={s} className="text-center p-3 bg-slate-50 rounded-lg">
-                <div className="text-2xl font-bold text-slate-700">{svcMetrics[s] ?? 0}</div>
-                <div className="text-xs text-slate-500 mt-1 capitalize">{s.replace(/_/g, " ")}</div>
-              </div>
-            ))}
+      {/* Service Calls */}
+      {calls && (
+        <section>
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Service Calls</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <Card title="Total"      value={calls.total}       color="slate"  />
+            <Card title="Assigned"   value={calls.assigned}    color="blue"   />
+            <Card title="Escalated"  value={calls.escalated}   color="red"    />
+            <Card title="Resolved"   value={calls.resolved}    color="green"  />
           </div>
-        </div>
+        </section>
+      )}
+
+      {/* Agent Performance */}
+      {agents.length > 0 && (
+        <section>
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Agent Performance</h2>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Agent ID</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Total Tasks</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Approved</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {agents.slice(0, 10).map((a) => (
+                  <tr key={a.agent_id} className="hover:bg-slate-50">
+                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{a.agent_id.slice(0, 8)}…</td>
+                    <td className="px-4 py-3 font-semibold text-slate-700">{a.total_tasks}</td>
+                    <td className="px-4 py-3 font-semibold text-green-600">{a.approved}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </div>
   );

@@ -1,42 +1,25 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import ApprovalQueue from "./pages/ApprovalQueue";
-import TeamOverview from "./pages/TeamOverview";
-import ServiceDashboard from "./pages/ServiceDashboard";
-import DocumentsPage from "./pages/DocumentsPage";
-import WorkReportsPage from "./pages/WorkReportsPage";
-import AgentDashboard from "./pages/AgentDashboard";
-import Sidebar from "./components/Sidebar";
+import Login         from "./pages/Login";
+import Layout        from "./layout/Layout";
 
-const PRIVILEGED          = new Set(["admin", "super_admin", "supervisor", "manager"]);
-const SERVICE_CALLS_ROLES = new Set(["super_admin", "admin", "supervisor", "coordinator"]);
+import Dashboard     from "./pages/Dashboard";
+import Tasks         from "./pages/Tasks";
+import ServiceCalls  from "./pages/ServiceCalls";
+import WorkDashboard from "./pages/WorkDashboard";
+import CreateReport  from "./pages/CreateReport";
+import Documents     from "./pages/Documents";
 
-function Layout({ role, onLogout, children }) {
-  return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar role={role} onLogout={onLogout} />
-      <main className="flex-1 overflow-auto">
-        <div className="px-6 py-5">{children}</div>
-      </main>
-    </div>
-  );
-}
-
-function PrivilegedOnly({ role, children }) {
-  return PRIVILEGED.has(role) ? children : <Navigate to="/" replace />;
-}
+// Roles that get the full sidebar + dashboard
+const FULL_ACCESS  = new Set(["super_admin", "admin", "supervisor", "coordinator", "finance", "viewer"]);
+const SERVICE_ROLES = new Set(["super_admin", "admin", "supervisor", "coordinator"]);
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
-  const [role, setRole]   = useState(localStorage.getItem("role"));
+  const [role,  setRole]  = useState(localStorage.getItem("role"));
 
-  const handleLogin = (newToken, newRole) => {
-    setToken(newToken);
-    setRole(newRole);
-  };
+  const handleLogin = (tok, r) => { setToken(tok); setRole(r); };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -46,68 +29,45 @@ export default function App() {
     setRole(null);
   };
 
-  if (!token) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!token) return <Login onLogin={handleLogin} />;
 
+  const wrap = (page) => (
+    <Layout role={role} onLogout={handleLogout}>
+      {page}
+    </Layout>
+  );
+
+  // Employees get tasks + their own documents + work reports
   const isEmployee = role === "employee" || role === "agent";
+  const homeRoute  = isEmployee ? "/tasks" : "/";
 
   return (
     <BrowserRouter>
       <Routes>
+        {/* Dashboard — privileged only */}
         <Route
           path="/"
-          element={
-            <Layout role={role} onLogout={handleLogout}>
-              {isEmployee ? <AgentDashboard onLogout={handleLogout} /> : <Dashboard />}
-            </Layout>
-          }
+          element={FULL_ACCESS.has(role) ? wrap(<Dashboard />) : <Navigate to="/tasks" replace />}
         />
-        <Route
-          path="/approvals"
-          element={
-            <PrivilegedOnly role={role}>
-              <Layout role={role} onLogout={handleLogout}>
-                <ApprovalQueue />
-              </Layout>
-            </PrivilegedOnly>
-          }
-        />
-        <Route
-          path="/team"
-          element={
-            <PrivilegedOnly role={role}>
-              <Layout role={role} onLogout={handleLogout}>
-                <TeamOverview />
-              </Layout>
-            </PrivilegedOnly>
-          }
-        />
+
+        {/* Tasks — all roles */}
+        <Route path="/tasks" element={wrap(<Tasks />)} />
+
+        {/* Service Calls */}
         <Route
           path="/service-calls"
-          element={
-            SERVICE_CALLS_ROLES.has(role)
-              ? <Layout role={role} onLogout={handleLogout}><ServiceDashboard /></Layout>
-              : <Navigate to="/" replace />
-          }
+          element={SERVICE_ROLES.has(role) ? wrap(<ServiceCalls />) : <Navigate to={homeRoute} replace />}
         />
-        <Route
-          path="/documents"
-          element={
-            <Layout role={role} onLogout={handleLogout}>
-              <DocumentsPage />
-            </Layout>
-          }
-        />
-        <Route
-          path="/work-reports"
-          element={
-            <Layout role={role} onLogout={handleLogout}>
-              <WorkReportsPage />
-            </Layout>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
+
+        {/* Documents — all roles */}
+        <Route path="/documents" element={wrap(<Documents />)} />
+
+        {/* Work Reports */}
+        <Route path="/work-reports" element={wrap(<WorkDashboard />)} />
+        <Route path="/report"       element={wrap(<CreateReport  />)} />
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to={homeRoute} replace />} />
       </Routes>
     </BrowserRouter>
   );
