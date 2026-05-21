@@ -1,11 +1,25 @@
+import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, Enum, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+
+
+class UserRole(str, enum.Enum):
+    admin               = "admin"
+    supervisor          = "supervisor"
+    finance             = "finance"
+    coordinator         = "coordinator"
+    employee            = "employee"
+    crm                 = "crm"
+    # legacy — kept for any remaining DB rows
+    super_admin         = "super_admin"
+    service_coordinator = "service_coordinator"
+    finance_officer     = "finance_officer"
 
 
 class User(Base):
@@ -21,6 +35,11 @@ class User(Base):
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     department: Mapped[str] = mapped_column(String(100), nullable=False)
     designation: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role"),
+        default=UserRole.employee,
+        nullable=False,
+    )
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     azure_ad_id: Mapped[str | None] = mapped_column(String(200), unique=True, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)

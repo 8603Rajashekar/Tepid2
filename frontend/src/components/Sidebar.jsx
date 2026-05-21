@@ -53,21 +53,17 @@ const ROLE_NAV = {
     { to: "/documents",      label: "Documents" },
     { to: "/work-reports",   label: "Work Reports" },
   ],
-  viewer: [
-    { to: "/",               label: "Dashboard" },
-    { to: "/documents",      label: "Documents" },
-  ],
 };
 
 const ROLE_LABEL = {
   super_admin: "Super Admin", admin: "Admin", supervisor: "Supervisor",
   coordinator: "Coordinator", finance: "Finance", employee: "Employee",
-  agent: "Agent", manager: "Manager", viewer: "Viewer",
+  agent: "Agent", manager: "Manager",
 };
 
 export default function Sidebar({ role, onLogout }) {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const navItems = ROLE_NAV[role] || ROLE_NAV.viewer;
+  const navItems = ROLE_NAV[role] || ROLE_NAV.employee;
 
   return (
     <aside className="w-56 bg-slate-900 text-white flex flex-col flex-shrink-0 h-screen">

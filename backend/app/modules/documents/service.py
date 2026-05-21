@@ -9,7 +9,7 @@ from app.core.permissions import check_permission, has_permission
 from app.core.security import TokenUser
 from app.modules.audit_log.service import AuditLogService
 from app.modules.documents.model import Document, DocumentStatus
-from app.modules.documents.schema import DocumentCreate, DocumentReject
+from app.modules.documents.schema import DocumentAction, DocumentCreate, DocumentReject
 
 ALLOWED_TRANSITIONS: dict[DocumentStatus, list[DocumentStatus]] = {
     DocumentStatus.uploaded: [DocumentStatus.review],
@@ -51,6 +51,7 @@ class DocumentService:
         doc = Document(
             name=data.name,
             file_url=data.file_url,
+            folder_id=data.folder_id,
             uploaded_by=UUID(current_user.id),
         )
         db.add(doc)
@@ -209,3 +210,35 @@ class DocumentService:
         )
         await db.commit()
         return doc
+
+    @staticmethod
+    async def dispatch_action(
+        db: AsyncSession, doc_id: UUID, data: DocumentAction, current_user: TokenUser,
+    ) -> Document:
+        """Unified action dispatcher — maps action string to the appropriate workflow method."""
+        action = data.action.lower()
+
+        # "esign" is an accepted alias for "signing"
+        if action in ("esign", "signing"):
+            return await DocumentService.send_for_signing(db, doc_id, current_user)
+        if action == "review":
+            return await DocumentService.send_for_review(db, doc_id, current_user)
+        if action == "approve":
+            return await DocumentService.approve(db, doc_id, current_user)
+        if action == "reject":
+            if not data.reason:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=422, detail="reason is required for reject")
+            return await DocumentService.reject(
+                db, doc_id,
+                type("_R", (), {"rejection_reason": data.reason})(),
+                current_user,
+            )
+        if action == "archive":
+            return await DocumentService.archive(db, doc_id, current_user)
+
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown action '{action}'. Valid: review, esign, approve, reject, archive",
+        )

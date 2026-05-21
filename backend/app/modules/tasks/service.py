@@ -4,9 +4,10 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import check_permission, has_permission
+from app.core.permissions import check_permission, has_permission, require_role
 from app.core.security import TokenUser
 from app.modules.audit_log.service import AuditLogService
+from app.modules.analytics.ws import manager as ws_manager
 from app.modules.notifications.service import NotificationService
 from app.modules.tasks.model import Task, TaskPriority, TaskStatus
 from app.modules.tasks.repository import TaskRepository
@@ -121,7 +122,7 @@ class TaskService:
     async def assign_task(
         db: AsyncSession, task_id: UUID, data: TaskAssign, current_user: TokenUser,
     ) -> Task:
-        check_permission(current_user, "tasks", "team")
+        require_role(current_user, "coordinator", "service_coordinator")
         task = await _fetch(db, task_id)
         _validate_transition(task.status, TaskStatus.assigned)
 
@@ -212,6 +213,7 @@ class TaskService:
     async def approve_task_action(
         db: AsyncSession, task_id: UUID, current_user: TokenUser,
     ) -> Task:
+        require_role(current_user, "supervisor")
         check_permission(current_user, "tasks", "team")
         task = await _fetch(db, task_id)
         _validate_transition(task.status, TaskStatus.approved)
@@ -233,6 +235,7 @@ class TaskService:
             action="task_approved", record_id=str(task.id),
             after_data={"status": TaskStatus.approved},
         )
+        await ws_manager.broadcast({"type": "task_update", "action": "approved"})
         return await TaskRepository.update(db, task)
 
     # ------------------------------------------------------------------
@@ -243,6 +246,7 @@ class TaskService:
     async def reject_task_action(
         db: AsyncSession, task_id: UUID, data: TaskReject, current_user: TokenUser,
     ) -> Task:
+        require_role(current_user, "supervisor")
         check_permission(current_user, "tasks", "team")
         task = await _fetch(db, task_id)
         _validate_transition(task.status, TaskStatus.rejected)

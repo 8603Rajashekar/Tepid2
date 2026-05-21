@@ -14,58 +14,75 @@ ACCESS_LEVEL: dict[str, int] = {
 
 PERMISSIONS: dict[str, dict[str, str]] = {
     "tasks": {
-        "super_admin": "full",
-        "admin":       "full",
-        "supervisor":  "team",
-        "coordinator": "read",
-        "finance":     "read",
-        "employee":    "own",
-        "viewer":      "read",
-        # legacy role aliases — kept so existing DB accounts continue to work
-        "manager":     "team",
-        "agent":       "own",
+        "admin":               "full",
+        "supervisor":          "team",
+        "coordinator":         "team",
+        "finance":             "read",
+        "employee":            "own",
+        "crm":                 "read",
+        # legacy
+        "super_admin":         "full",
+        "service_coordinator": "team",
+        "finance_officer":     "read",
     },
     "expenses": {
-        "super_admin": "full",
-        "admin":       "full",
-        "supervisor":  "view",
-        "finance":     "full",
-        "employee":    "own",
-        "viewer":      "read",
-        "manager":     "view",
-        "agent":       "own",
+        "admin":               "full",
+        "supervisor":          "own",
+        "finance":             "full",
+        "coordinator":         "own",
+        "employee":            "own",
+        "crm":                 "own",
+        # legacy
+        "super_admin":         "full",
+        "finance_officer":     "full",
     },
     "service_calls": {
-        "super_admin": "full",
-        "admin":       "full",
-        "coordinator": "full",
-        "supervisor":  "view",
-        "employee":    "view",
-        "viewer":      "read",
-        "manager":     "full",
-        "agent":       "view",
+        "admin":               "full",
+        "coordinator":         "full",
+        "supervisor":          "own",
+        "finance":             "read",
+        "employee":            "own",
+        "crm":                 "full",
+        # legacy
+        "super_admin":         "full",
+        "service_coordinator": "full",
+        "finance_officer":     "read",
     },
     "documents": {
-        "super_admin": "full",
-        "admin":       "full",
-        "supervisor":  "team",
-        "coordinator": "read",
-        "finance":     "read",
-        "employee":    "own",
-        "viewer":      "read",
-        "manager":     "team",
-        "agent":       "own",
+        "admin":               "full",
+        "supervisor":          "team",
+        "coordinator":         "read",
+        "finance":             "read",
+        "employee":            "own",
+        "crm":                 "read",
+        # legacy
+        "super_admin":         "full",
+        "service_coordinator": "read",
+        "finance_officer":     "read",
     },
     "work_reports": {
-        "super_admin": "full",
-        "admin":       "full",
-        "supervisor":  "team",
-        "coordinator": "read",
-        "finance":     "read",
-        "employee":    "own",
-        "viewer":      "read",
-        "manager":     "team",
-        "agent":       "own",
+        "admin":               "full",
+        "supervisor":          "team",
+        "coordinator":         "read",
+        "finance":             "own",
+        "employee":            "own",
+        "crm":                 "own",
+        # legacy
+        "super_admin":         "full",
+        "service_coordinator": "read",
+        "finance_officer":     "own",
+    },
+    "crm": {
+        "admin":               "full",
+        "supervisor":          "full",
+        "coordinator":         "full",
+        "finance":             "read",
+        "employee":            "read",
+        "crm":                 "full",
+        # legacy
+        "super_admin":         "full",
+        "service_coordinator": "full",
+        "finance_officer":     "read",
     },
 }
 
@@ -109,3 +126,17 @@ def has_permission(user: TokenUser, module: str, required: str) -> bool:
     if access is None:
         return False
     return ACCESS_LEVEL.get(access, -1) >= ACCESS_LEVEL.get(required, 0)
+
+
+def require_role(user: TokenUser, *allowed_roles: str) -> None:
+    """Raise HTTP 403 if the user's role is not in the allowed set.
+
+    Always implicitly allows super_admin and admin so callers only need to list
+    the role-specific allowlist (e.g. 'supervisor', 'finance_officer').
+    """
+    full_set = {"super_admin", "admin", *allowed_roles}  # admin always has access
+    if user.role not in full_set:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{user.role}' is not permitted for this action",
+        )

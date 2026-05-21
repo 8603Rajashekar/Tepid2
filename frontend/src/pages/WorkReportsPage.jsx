@@ -1,13 +1,5 @@
 import { useEffect, useState } from "react";
-import api from "../services/api";
-
-const MOOD_EMOJI = { great: "😊", good: "🙂", neutral: "😐", struggling: "😔" };
-const MOOD_COLOR = {
-  great:      "text-green-600",
-  good:       "text-blue-600",
-  neutral:    "text-slate-500",
-  struggling: "text-red-500",
-};
+import api from "../api/api";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -15,7 +7,7 @@ function today() {
 
 export default function WorkReportsPage() {
   const role = localStorage.getItem("role") || "";
-  const canViewTeam = ["super_admin", "admin", "supervisor", "manager"].includes(role);
+  const canViewTeam = ["admin", "super_admin", "supervisor"].includes(role);
 
   const [reports, setReports]       = useState([]);
   const [tab, setTab]               = useState("my");
@@ -28,12 +20,11 @@ export default function WorkReportsPage() {
     summary:       "",
     blockers:      "",
     tomorrow_plan: "",
-    mood:          "",
   });
 
   const fetchReports = async (t = tab) => {
     try {
-      const endpoint = t === "team" ? "/work-reports/team" : "/work-reports/me";
+      const endpoint = t === "team" ? "/reports/team" : "/reports/me";
       const res = await api.get(endpoint);
       setReports(res.data);
     } catch {
@@ -48,14 +39,13 @@ export default function WorkReportsPage() {
     setError(null);
     setSuccess(null);
     try {
-      await api.post("/work-reports/", {
+      await api.post("/reports/", {
         ...form,
         hours_logged: parseFloat(form.hours_logged),
-        mood: form.mood || null,
       });
       setSuccess("Report submitted successfully!");
       setShowForm(false);
-      setForm({ report_date: today(), hours_logged: "", summary: "", blockers: "", tomorrow_plan: "", mood: "" });
+      setForm({ report_date: today(), hours_logged: "", summary: "", blockers: "", tomorrow_plan: "" });
       fetchReports(tab);
     } catch (e) {
       setError(e.response?.data?.detail || "Submission failed");
@@ -137,24 +127,6 @@ export default function WorkReportsPage() {
               onChange={(e) => setForm({ ...form, tomorrow_plan: e.target.value })}
             />
           </div>
-          <div>
-            <label className="text-xs text-slate-500 font-medium">Mood</label>
-            <div className="flex gap-2 mt-1">
-              {["great", "good", "neutral", "struggling"].map((m) => (
-                <button
-                  key={m} type="button"
-                  onClick={() => setForm({ ...form, mood: form.mood === m ? "" : m })}
-                  className={`text-sm px-3 py-1.5 rounded-lg border transition ${
-                    form.mood === m
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "border-slate-300 text-slate-600 hover:border-slate-400"
-                  }`}
-                >
-                  {MOOD_EMOJI[m]} {m}
-                </button>
-              ))}
-            </div>
-          </div>
           <div className="flex gap-2 pt-1">
             <button type="submit" className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 transition">
               Submit
@@ -219,11 +191,6 @@ export default function WorkReportsPage() {
                   </p>
                   <p className="text-xs text-slate-400">{r.hours_logged}h logged</p>
                 </div>
-                {r.mood && (
-                  <span className={`text-sm font-medium ${MOOD_COLOR[r.mood]}`}>
-                    {MOOD_EMOJI[r.mood]} {r.mood}
-                  </span>
-                )}
               </div>
               <p className="text-sm text-slate-700 mb-2">{r.summary}</p>
               {r.blockers && (

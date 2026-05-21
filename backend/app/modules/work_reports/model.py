@@ -3,17 +3,23 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
 
 class MoodLevel(str, enum.Enum):
+    # Emotional state (original values)
     great      = "great"
     good       = "good"
     neutral    = "neutral"
     struggling = "struggling"
+    # Workload intensity (spec values)
+    light      = "light"
+    normal     = "normal"
+    heavy      = "heavy"
+    overloaded = "overloaded"
 
 
 class WorkReport(Base):
@@ -36,5 +42,8 @@ class WorkReport(Base):
     tomorrow_plan: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     mood: Mapped[MoodLevel | None] = mapped_column(Enum(MoodLevel), nullable=True)
+
+    tasks:       Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    attachments: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

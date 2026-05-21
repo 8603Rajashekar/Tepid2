@@ -13,17 +13,15 @@ export default function CreateReport() {
     summary:       "",
     blockers:      "",
     tomorrow_plan: "",
-    mood:          "",
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     try {
-      await api.post("/work-reports/", {
+      await api.post("/reports/", {
         ...form,
         hours_logged: parseFloat(form.hours_logged),
-        mood: form.mood || null,
       });
       navigate("/work-reports");
     } catch (e) {
@@ -81,23 +79,6 @@ export default function CreateReport() {
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
             placeholder="What are you planning tomorrow?"
             value={form.tomorrow_plan} onChange={(e) => field("tomorrow_plan", e.target.value)} />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-2">Mood</label>
-          <div className="flex gap-2">
-            {[["great","😊"],["good","🙂"],["neutral","😐"],["struggling","😔"]].map(([m, emoji]) => (
-              <button key={m} type="button"
-                onClick={() => field("mood", form.mood === m ? "" : m)}
-                className={`flex-1 py-2 rounded-lg border text-xs font-medium transition ${
-                  form.mood === m
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "border-slate-300 text-slate-600 hover:border-slate-400"
-                }`}>
-                {emoji} {m}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="flex gap-2 pt-1">

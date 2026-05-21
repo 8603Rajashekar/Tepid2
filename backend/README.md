@@ -15,7 +15,7 @@ uvicorn app.main:app --reload --app-dir backend
 API docs:
 
 ```text
-http://127.0.0.1:8000/api/v1/docs
+http://127.0.0.1:8001/api/v1/docs
 ```
 
 ## Test

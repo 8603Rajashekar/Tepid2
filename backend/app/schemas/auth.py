@@ -11,6 +11,7 @@ class UserInfo(BaseModel):
     id: UUID
     email: str
     full_name: str
+    role: str
     roles: list[str]
 
 

@@ -32,6 +32,8 @@ class WorkReportService:
             blockers=data.blockers,
             tomorrow_plan=data.tomorrow_plan,
             mood=data.mood,
+            tasks=data.tasks or [],
+            attachments=data.attachments or [],
         )
         db.add(report)
         try:

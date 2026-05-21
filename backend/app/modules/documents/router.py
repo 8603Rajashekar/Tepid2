@@ -1,12 +1,22 @@
+import shutil
+import uuid as _uuid
+from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv",
+                      ".jpg", ".jpeg", ".png", ".gif", ".zip", ".txt"}
 
 from app.core.dependencies import get_current_user
 from app.core.security import TokenUser
 from app.db.session import get_db
-from app.modules.documents.schema import DocumentCreate, DocumentReject, DocumentResponse
+from app.modules.documents.schema import DocumentAction, DocumentCreate, DocumentReject, DocumentResponse
 from app.modules.documents.service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
@@ -43,6 +53,57 @@ async def get_document(
     current_user: TokenUser = Depends(get_current_user),
 ):
     return await DocumentService.get_one(db, doc_id, current_user)
+
+
+@router.post("/upload", response_model=DocumentResponse, status_code=201)
+async def upload_file(
+    file: UploadFile = File(...),
+    folder_id: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+):
+    """Real file upload — saves to disk, version-bumps if same filename exists."""
+    from app.modules.documents.model import Document
+
+    suffix = Path(file.filename or "file").suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"File type '{suffix}' not allowed")
+
+    # Version control — find existing doc with same name
+    result = await db.execute(
+        select(Document).where(Document.name == file.filename).order_by(Document.version.desc())
+    )
+    existing = result.scalars().first()
+    version = (existing.version + 1) if existing else 1
+
+    file_id = str(_uuid.uuid4())
+    safe_name = f"{file_id}{suffix}"
+    dest = UPLOAD_DIR / safe_name
+
+    with dest.open("wb") as buf:
+        shutil.copyfileobj(file.file, buf)
+
+    file_url = f"/uploads/{safe_name}"
+    folder_uuid = None
+    if folder_id:
+        try:
+            folder_uuid = UUID(folder_id)
+        except ValueError:
+            pass
+
+    from app.modules.documents.model import Document, DocumentStatus
+    doc = Document(
+        name=file.filename,
+        file_url=file_url,
+        version=version,
+        folder_id=folder_uuid,
+        uploaded_by=UUID(current_user.id),
+        status=DocumentStatus.uploaded,
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+    return doc
 
 
 @router.post("/", response_model=DocumentResponse, status_code=201)
@@ -98,3 +159,14 @@ async def archive_document(
     current_user: TokenUser = Depends(get_current_user),
 ):
     return await DocumentService.archive(db, doc_id, current_user)
+
+
+@router.post("/{doc_id}/action", response_model=DocumentResponse)
+async def document_action(
+    doc_id: UUID,
+    data: DocumentAction,
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+):
+    """Unified action endpoint. action: review | esign | approve | reject | archive"""
+    return await DocumentService.dispatch_action(db, doc_id, data, current_user)

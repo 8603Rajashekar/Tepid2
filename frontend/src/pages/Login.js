@@ -16,7 +16,7 @@ export default function Login({ onLogin }) {
         { email, password }
       );
       const { access_token, user } = res.data;
-      const primaryRole = user.roles[0] || "agent";
+      const primaryRole = user.role || user.roles?.[0] || "employee";
       localStorage.setItem("token", access_token);
       localStorage.setItem("role", primaryRole);
       localStorage.setItem("user", JSON.stringify(user));
@@ -93,26 +93,28 @@ export default function Login({ onLogin }) {
           {loading ? "Signing in…" : "Sign In"}
         </button>
 
-        <div className="mt-6 border-t border-slate-100 pt-4 space-y-1">
-          <p className="text-xs text-slate-400 text-center font-medium mb-2">Test accounts</p>
-          {[
-            ["super_admin@company.com", "SuperAdmin@1234"],
-            ["admin@company.com",       "Admin@1234"],
-            ["supervisor@company.com",  "Supervisor@1234"],
-            ["coordinator@company.com", "Coordinator@1234"],
-            ["finance@company.com",     "Finance@1234"],
-            ["employee@company.com",    "Employee@1234"],
-            ["viewer@company.com",      "Viewer@1234"],
-          ].map(([e, p]) => (
-            <button
-              key={e}
-              type="button"
-              onClick={() => { setEmail(e); setPassword(p); }}
-              className="w-full text-left text-xs px-2 py-1 rounded hover:bg-slate-50 text-slate-500 transition font-mono"
-            >
-              {e}
-            </button>
-          ))}
+        <div className="mt-6 border-t border-slate-100 pt-4">
+          <p className="text-xs text-slate-400 text-center font-medium mb-2">
+            Quick login — password: <span className="font-mono text-slate-500">Password@123</span>
+          </p>
+          <div className="grid grid-cols-2 gap-1">
+            {[
+              ["admin@company.com",        "admin"],
+              ["supervisor@company.com",   "supervisor"],
+              ["coordinator@company.com",  "coordinator"],
+              ["finance@company.com",      "finance"],
+              ["employee@company.com",     "employee"],
+            ].map(([e, label]) => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => { setEmail(e); setPassword("Password@123"); }}
+                className="text-left text-xs px-2 py-1.5 rounded hover:bg-slate-50 text-slate-500 transition font-mono truncate"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

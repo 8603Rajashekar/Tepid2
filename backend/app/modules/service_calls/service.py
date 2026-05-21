@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import check_permission, has_permission
+from app.core.permissions import check_permission, has_permission, require_role
 from app.core.security import TokenUser
 from app.modules.audit_log.service import AuditLogService
 from app.modules.notifications.service import NotificationService
@@ -45,7 +45,7 @@ class ServiceCallService:
     async def create(
         db: AsyncSession, data: ServiceCallCreate, current_user: TokenUser,
     ) -> ServiceCall:
-        check_permission(current_user, "service_calls", "read")
+        check_permission(current_user, "service_calls", "own")
 
         sla = get_sla(data.priority)
         call = ServiceCall(
@@ -96,6 +96,7 @@ class ServiceCallService:
     async def assign(
         db: AsyncSession, call_id: UUID, data, current_user: TokenUser,
     ) -> ServiceCall:
+        require_role(current_user, "service_coordinator", "supervisor")
         check_permission(current_user, "service_calls", "full")
         call = await _fetch(db, call_id)
 
@@ -204,6 +205,7 @@ class ServiceCallService:
     async def close(
         db: AsyncSession, call_id: UUID, current_user: TokenUser,
     ) -> ServiceCall:
+        require_role(current_user, "service_coordinator", "supervisor")
         check_permission(current_user, "service_calls", "full")
         call = await _fetch(db, call_id)
 
@@ -235,6 +237,7 @@ class ServiceCallService:
     async def escalate(
         db: AsyncSession, call_id: UUID, current_user: TokenUser,
     ) -> ServiceCall:
+        require_role(current_user, "service_coordinator", "supervisor")
         check_permission(current_user, "service_calls", "full")
         call = await _fetch(db, call_id)
 

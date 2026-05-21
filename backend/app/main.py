@@ -1,9 +1,16 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.modules.analytics.router import router as analytics_router
+from app.modules.crm.router import router as crm_router
+from app.modules.analytics.ws import router as ws_router
+from app.modules.approvals.router import router as approvals_router
+from app.modules.dashboard.router import router as dashboard_router
 from app.modules.documents.router import router as documents_router
 from app.modules.expenses.router import router as expenses_router
 from app.modules.service_calls.router import router as service_calls_router
@@ -27,22 +34,31 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
+        allow_origin_regex=settings.CORS_ORIGIN_REGEX,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     register_exception_handlers(app)
+    app.include_router(ws_router)   # no prefix — WebSocket at /ws/dashboard
     app.include_router(health_router, prefix=settings.API_V1_PREFIX)
     app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
     app.include_router(users_router, prefix=settings.API_V1_PREFIX)
     app.include_router(tasks_router, prefix=settings.API_V1_PREFIX)
     app.include_router(tracking_router, prefix=settings.API_V1_PREFIX)
     app.include_router(analytics_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(approvals_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(dashboard_router, prefix=settings.API_V1_PREFIX)
     app.include_router(service_calls_router, prefix=settings.API_V1_PREFIX)
     app.include_router(expenses_router, prefix=settings.API_V1_PREFIX)
     app.include_router(documents_router, prefix=settings.API_V1_PREFIX)
     app.include_router(work_reports_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(crm_router, prefix=settings.API_V1_PREFIX)
+
+    uploads_dir = Path(__file__).resolve().parents[2] / "uploads"
+    uploads_dir.mkdir(exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
     return app
 

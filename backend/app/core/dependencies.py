@@ -22,6 +22,7 @@ async def get_current_user(
             id="00000000-0000-0000-0000-000000000001",
             email="admin@example.com",
             full_name="Local Admin",
+            role="super_admin",
             roles=["super_admin", "admin"],
         )
 

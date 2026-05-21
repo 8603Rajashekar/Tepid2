@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
+import { useToast } from "../context/ToastContext";
 
 const STATUS_COLOR = {
   new:            "bg-slate-100 text-slate-600",
@@ -26,34 +27,52 @@ function Badge({ status }) {
 }
 
 export default function Tasks() {
-  const role              = localStorage.getItem("role") || "";
-  const canManage         = ["super_admin", "admin", "supervisor"].includes(role);
-  const canApprove        = ["super_admin", "admin", "supervisor"].includes(role);
+  const toast      = useToast();
+  const role       = localStorage.getItem("role") || "";
+  const canManage  = ["admin", "super_admin", "supervisor"].includes(role);
+  const canApprove = ["admin", "super_admin", "supervisor"].includes(role);
 
   const [tasks,        setTasks]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState(null);
   const [rejectId,     setRejectId]     = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showCreate,   setShowCreate]   = useState(false);
+  const [acting,       setActing]       = useState(null); // eslint-disable-line no-unused-vars
   const [form,         setForm]         = useState({ title: "", description: "", priority: "normal", due_date: "" });
 
   const fetchTasks = async () => {
     try {
       const res = await api.get("/tasks/");
       setTasks(res.data);
+      setError(null);
     } catch {
       setError("Failed to load tasks");
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => { fetchTasks(); }, []);
 
+  const ACTION_MSG = {
+    start:   "Task started",
+    submit:  "Submitted for review",
+    approve: "Task approved",
+    assign:  "Task assigned",
+  };
+
   const act = async (endpoint, body = null) => {
+    setActing(endpoint);
     try {
       await (body ? api.post(endpoint, body) : api.post(endpoint));
+      const key = Object.keys(ACTION_MSG).find((k) => endpoint.includes(k));
+      toast.success(key ? ACTION_MSG[key] : "Done");
       fetchTasks();
     } catch (e) {
-      setError(e.response?.data?.detail || "Action failed");
+      toast.error(e.response?.data?.detail || "Action failed");
+    } finally {
+      setActing(null);
     }
   };
 
@@ -75,6 +94,13 @@ export default function Tasks() {
     setRejectId(null);
     setRejectReason("");
   };
+
+  if (loading) return (
+    <div className="space-y-4 animate-pulse">
+      <div className="h-7 w-32 bg-slate-200 rounded" />
+      {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-slate-100 rounded-xl border border-slate-200" />)}
+    </div>
+  );
 
   return (
     <div className="space-y-5">
@@ -157,18 +183,22 @@ export default function Tasks() {
             {/* Actions */}
             <div className="flex gap-2 flex-wrap">
               {t.status === "new" && canManage && (
-                <ActionBtn color="blue" onClick={() => act(`/tasks/${t.id}/assign`, { assigned_to: JSON.parse(localStorage.getItem("user") || "{}").id })}>
-                  Assign to Me
-                </ActionBtn>
-              )}
-              {t.status === "assigned" && (
-                <ActionBtn color="indigo" onClick={() => act(`/tasks/${t.id}/start`)}>Start</ActionBtn>
+                  <ActionBtn
+                    color="blue"
+                    loading={acting === `/tasks/${t.id}/assign`}
+                    onClick={() => act(`/tasks/${t.id}/assign`, { assigned_to: JSON.parse(localStorage.getItem("user") || "{}").id })}
+                  >
+                    Assign to Me
+                  </ActionBtn>
+                )}
+                {t.status === "assigned" && (
+                <ActionBtn color="indigo" loading={acting === `/tasks/${t.id}/start`} onClick={() => act(`/tasks/${t.id}/start`)}>Start</ActionBtn>
               )}
               {t.status === "in_progress" && (
-                <ActionBtn color="yellow" onClick={() => act(`/tasks/${t.id}/submit`)}>Submit for Review</ActionBtn>
+                <ActionBtn color="yellow" loading={acting === `/tasks/${t.id}/submit`} onClick={() => act(`/tasks/${t.id}/submit`)}>Submit for Review</ActionBtn>
               )}
               {t.status === "pending_review" && canApprove && (<>
-                <ActionBtn color="green" onClick={() => act(`/tasks/${t.id}/approve`)}>Approve</ActionBtn>
+                <ActionBtn color="green" loading={acting === `/tasks/${t.id}/approve`} onClick={() => act(`/tasks/${t.id}/approve`)}>Approve</ActionBtn>
                 <ActionBtn color="red"   onClick={() => setRejectId(t.id)}>Reject</ActionBtn>
               </>)}
               {t.rejection_reason && (
@@ -182,7 +212,7 @@ export default function Tasks() {
   );
 }
 
-function ActionBtn({ color, children, onClick }) {
+function ActionBtn({ color, children, onClick, loading }) {
   const c = {
     blue:   "bg-blue-50   text-blue-700   border-blue-200   hover:bg-blue-100",
     indigo: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
@@ -191,8 +221,12 @@ function ActionBtn({ color, children, onClick }) {
     red:    "bg-red-50    text-red-700    border-red-200    hover:bg-red-100",
   };
   return (
-    <button onClick={onClick} className={`text-xs px-3 py-1 rounded-md border font-medium transition ${c[color]}`}>
-      {children}
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className={`text-xs px-3 py-1 rounded-md border font-medium transition disabled:opacity-50 ${c[color]}`}
+    >
+      {loading ? "..." : children}
     </button>
   );
 }

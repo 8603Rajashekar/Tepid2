@@ -22,7 +22,7 @@ const PRIORITY_COLOR = {
 
 export default function ServiceCalls() {
   const role       = localStorage.getItem("role") || "";
-  const canManage  = ["super_admin", "admin", "coordinator"].includes(role);
+  const canManage  = ["admin", "super_admin", "service_coordinator"].includes(role);
 
   const [calls,       setCalls]       = useState([]);
   const [error,       setError]       = useState(null);

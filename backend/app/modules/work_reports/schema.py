@@ -1,19 +1,17 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.modules.work_reports.model import MoodLevel
-
-
 class WorkReportCreate(BaseModel):
     report_date:   date
-    hours_logged:  float = Field(..., gt=0, le=12)
-    summary:       str   = Field(..., min_length=10, max_length=5000)
-    blockers:      Optional[str] = Field(None, max_length=2000)
-    tomorrow_plan: Optional[str] = Field(None, max_length=2000)
-    mood:          Optional[MoodLevel] = None
+    hours_logged:  float          = Field(..., gt=0, le=12)
+    summary:       str            = Field(..., min_length=10, max_length=5000)
+    blockers:      Optional[str]  = Field(None, max_length=2000)
+    tomorrow_plan: Optional[str]  = Field(None, max_length=2000)
+    tasks:         Optional[list[str]] = None   # list of task ID strings
+    attachments:   Optional[list[Any]] = None   # [{name, url}, ...]
 
     @field_validator("report_date")
     @classmethod
@@ -26,6 +24,13 @@ class WorkReportCreate(BaseModel):
             raise ValueError("Cannot submit reports more than 2 days in the past")
         return v
 
+    @field_validator("hours_logged")
+    @classmethod
+    def validate_hours(cls, v: float) -> float:
+        if v > 12:
+            raise ValueError("Max 12 hours allowed")
+        return v
+
 
 class WorkReportResponse(BaseModel):
     id:            UUID
@@ -35,7 +40,8 @@ class WorkReportResponse(BaseModel):
     summary:       str
     blockers:      Optional[str]
     tomorrow_plan: Optional[str]
-    mood:          Optional[MoodLevel]
+    tasks:         Optional[list]
+    attachments:   Optional[list]
     created_at:    datetime
 
     class Config:

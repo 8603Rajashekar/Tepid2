@@ -12,6 +12,7 @@ class TokenUser(BaseModel):
     id: str
     email: str
     full_name: str
+    role: str
     roles: list[str]
 
 
@@ -52,9 +53,15 @@ async def decode_access_token(token: str) -> TokenUser:
             detail="Invalid token type",
         )
 
+    # Handle both old tokens (roles=[], no role field) and new tokens
+    _roles_raw = payload.get("roles") or []
+    _roles_nonempty = [r for r in _roles_raw if r]
+    role = payload.get("role") or (_roles_nonempty[0] if _roles_nonempty else "employee")
+    roles = _roles_nonempty or [role]
     return TokenUser(
         id=payload["sub"],
         email=payload["email"],
         full_name=payload["full_name"],
-        roles=payload.get("roles", []),
+        role=role,
+        roles=roles,
     )

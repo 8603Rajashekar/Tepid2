@@ -39,3 +39,8 @@ class ExpenseRepository:
         await db.commit()
         await db.refresh(expense)
         return expense
+
+    @staticmethod
+    async def delete(db: AsyncSession, expense: Expense) -> None:
+        await db.delete(expense)
+        await db.commit()

@@ -9,29 +9,19 @@ from app.modules.expenses.model import ExpenseCategory, ExpenseStatus
 
 
 class ExpenseCreate(BaseModel):
-    title: str              = Field(..., min_length=3, max_length=200)
+    title: str = Field(..., min_length=3, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
-    amount: Decimal         = Field(..., gt=0, le=1_000_000, decimal_places=2)
+    amount: Decimal = Field(..., gt=0, le=1_000_000, decimal_places=2)
     category: ExpenseCategory
     receipt_url: Optional[str] = Field(None, max_length=500)
 
 
 class ExpenseUpdate(BaseModel):
-    title: Optional[str]        = Field(None, min_length=3, max_length=200)
-    description: Optional[str]  = Field(None, max_length=2000)
-    amount: Optional[Decimal]   = Field(None, gt=0, le=1_000_000, decimal_places=2)
+    title: Optional[str] = Field(None, min_length=3, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    amount: Optional[Decimal] = Field(None, gt=0, le=1_000_000, decimal_places=2)
     category: Optional[ExpenseCategory] = None
-    receipt_url: Optional[str]  = Field(None, max_length=500)
-
-
-class ExpenseApprove(BaseModel):
-    """Used for supervisor /approve and finance /finance — approval only."""
-    pass  # no body needed; the action is implicit from the endpoint
-
-
-class ExpenseReject(BaseModel):
-    """Used at any stage by /reject endpoint."""
-    reason: str = Field(..., min_length=5, max_length=1000)
+    receipt_url: Optional[str] = Field(None, max_length=500)
 
 
 class ExpenseResponse(BaseModel):

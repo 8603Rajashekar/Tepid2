@@ -8,7 +8,6 @@ from app.core.security import (
     create_refresh_token,
     verify_password,
 )
-from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse, UserInfo
 
@@ -37,19 +36,26 @@ class AuthService:
                 detail="Account is disabled",
             )
 
-        roles = await RoleRepository.get_roles_for_user(db, user.id)
+        role = user.role.value if user.role else "employee"
 
         token_data = {
             "sub": str(user.id),
             "email": user.email,
             "full_name": user.full_name,
-            "roles": roles,
+            "role": role,
+            "roles": [role],
         }
 
         return TokenResponse(
             access_token=create_access_token(token_data),
             refresh_token=create_refresh_token(token_data),
-            user=UserInfo(id=user.id, email=user.email, full_name=user.full_name, roles=roles),
+            user=UserInfo(
+                id=user.id,
+                email=user.email,
+                full_name=user.full_name,
+                role=role,
+                roles=[role],
+            ),
         )
 
     @staticmethod
@@ -72,14 +78,15 @@ class AuthService:
                 detail="Invalid token type",
             )
 
+        role = data.get("role", (data.get("roles") or ["employee"])[0])
         token_data = {
             "sub": data["sub"],
             "email": data["email"],
             "full_name": data["full_name"],
-            "roles": data.get("roles", []),
+            "role": role,
+            "roles": [role],
         }
 
-        roles = data.get("roles", [])
         return TokenResponse(
             access_token=create_access_token(token_data),
             refresh_token=create_refresh_token(token_data),
@@ -87,6 +94,7 @@ class AuthService:
                 id=data["sub"],
                 email=data["email"],
                 full_name=data["full_name"],
-                roles=roles,
+                role=role,
+                roles=[role],
             ),
         )

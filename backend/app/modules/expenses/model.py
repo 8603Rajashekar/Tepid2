@@ -24,9 +24,10 @@ class ExpenseCategory(str, enum.Enum):
 
 class ExpenseStatus(str, enum.Enum):
     draft               = "draft"
-    pending             = "pending"
+    submitted           = "submitted"
     supervisor_approved = "supervisor_approved"
     finance_approved    = "finance_approved"
+    admin_approved      = "admin_approved"
     rejected            = "rejected"
     reimbursed          = "reimbursed"
 
