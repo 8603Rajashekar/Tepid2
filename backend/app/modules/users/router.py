@@ -36,9 +36,9 @@ async def get_user(
 async def create_user(
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
-    _: TokenUser = Depends(require_roles(["admin", "super_admin"])),
+    current_user: TokenUser = Depends(require_roles(["admin", "super_admin", "supervisor"])),
 ):
-    return await UserService.create_user(db, payload)
+    return await UserService.create_user(db, payload, current_user)
 
 
 @router.put("/{user_id}", response_model=UserResponse)

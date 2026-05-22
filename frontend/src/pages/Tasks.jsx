@@ -20,20 +20,47 @@ function fmtTime(minutes) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function fmtDateTime(ts) {
+  if (!ts) return null;
+  return new Date(ts).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 const ROLE_LABEL = {
-  admin: "Admin", super_admin: "Admin", supervisor: "Supervisor",
-  coordinator: "Coordinator", employee: "Employee", crm: "CRM",
-  service_coordinator: "Coordinator", finance_officer: "Finance", finance: "Finance",
+  admin: "Administrator",
+  supervisor: "Team Supervisor",
+  coordinator: "Call Coordinator",
+  finance_officer: "Finance Officer",
+  employee: "Field Employee",
+  crm: "CRM Agent",
+};
+
+const TASK_TYPE_LABEL = {
+  service: "Service",
+  issue: "Issue",
+  inspection: "Inspection",
+  installation: "Installation",
+  other: "Other",
 };
 
 // Roles that this role can assign tasks to
 const ASSIGNABLE_ROLES = {
-  admin:               ["admin","super_admin","supervisor","coordinator","employee","crm","service_coordinator","finance_officer","finance"],
-  super_admin:         ["admin","super_admin","supervisor","coordinator","employee","crm","service_coordinator","finance_officer","finance"],
-  supervisor:          ["coordinator","employee","service_coordinator","crm"],
+  admin:               ["admin","supervisor","coordinator","finance_officer","employee","crm"],
+  super_admin:         ["admin","supervisor","coordinator","finance_officer","employee","crm"],
+  supervisor:          ["coordinator","employee"],
   coordinator:         ["employee"],
   service_coordinator: ["employee"],
 };
+
+function getAssignableUsers(users, role) {
+  const allowedRoles = ASSIGNABLE_ROLES[role] || [];
+  return users.filter((user) => allowedRoles.includes(user.role));
+}
 
 // ── Small components ──────────────────────────────────────────────────────
 function Badge({ status }) {
@@ -67,6 +94,22 @@ function Skeleton() {
     <div className="space-y-4 animate-pulse">
       <div className="h-7 w-32 bg-slate-200 rounded" />
       {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-slate-100 rounded-xl border border-slate-200" />)}
+    </div>
+  );
+}
+
+function MetricCard({ label, value, tone = "slate" }) {
+  const tones = {
+    slate: "bg-white border-slate-200 text-slate-700",
+    yellow: "bg-yellow-50 border-yellow-200 text-yellow-800",
+    green: "bg-green-50 border-green-200 text-green-800",
+    red: "bg-red-50 border-red-200 text-red-800",
+  };
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${tones[tone] || tones.slate}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</p>
+      <p className="text-2xl font-bold mt-1">{value}</p>
     </div>
   );
 }
@@ -208,11 +251,12 @@ function LiveTimer({ startedAt }) {
 }
 
 // ── Single task row (used in both list and team board) ────────────────────
-function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssign, assignees }) {
+function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssign, assignees, role }) {
   const [showAssign, setShowAssign] = useState(false);
   const [assignTo,   setAssignTo]   = useState("");
 
   const canApproveThis = isAdmin || t.created_by === myId;
+  const allowedUsers = getAssignableUsers(assignees || [], role);
 
   const handleAssign = () => {
     if (!assignTo) return;
@@ -228,6 +272,9 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-slate-800 text-sm">{t.title}</p>
             <Badge status={t.status} />
+            <span className="text-xs bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-full font-semibold">
+              {TASK_TYPE_LABEL[t.task_type] || t.task_type || "Other"}
+            </span>
             {/* Live timer while in progress */}
             {t.status === "in_progress" && t.started_at && (
               <LiveTimer startedAt={t.started_at} />
@@ -260,6 +307,12 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
         {t.created_by_name && (
           <span>Assigned by: <span className="font-medium text-slate-600">{t.created_by_name}</span></span>
         )}
+        {t.assigned_at && (
+          <span>Assigned at: <span className="font-medium text-slate-600">{fmtDateTime(t.assigned_at)}</span></span>
+        )}
+        {t.completed_at && (
+          <span>Submitted at: <span className="font-medium text-slate-600">{fmtDateTime(t.completed_at)}</span></span>
+        )}
         {t.time_spent_minutes != null && (
           <span className="text-green-600 font-medium">⏱ {fmtTime(t.time_spent_minutes)}</span>
         )}
@@ -275,13 +328,13 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
       {/* Action buttons */}
       <div className="flex gap-2 flex-wrap">
         {/* Assign / Reassign */}
-        {onAssign && assignees && (t.status === "new" || (canApproveThis && t.status === "assigned")) && (
+        {onAssign && allowedUsers.length > 0 && (t.status === "new" || (canApproveThis && t.status === "assigned")) && (
           showAssign ? (
             <div className="flex items-center gap-2">
               <select value={assignTo} onChange={(e) => setAssignTo(e.target.value)}
                 className="text-xs border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
                 <option value="">Select person…</option>
-                {assignees.map((u) => (
+                {allowedUsers.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.full_name} ({ROLE_LABEL[u.role] || u.role})
                   </option>
@@ -302,7 +355,7 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
           <Btn color="indigo" onClick={() => onApprove(t.id, "start")}>Start</Btn>
         )}
         {t.status === "in_progress" && t.assigned_to === myId && (
-          <Btn color="yellow" onClick={() => onApprove(t.id, "submit")}>Submit for Review</Btn>
+          <Btn color="yellow" onClick={() => onApprove(t.id, "submit")}>Submit Assigned Work</Btn>
         )}
 
         {/* Approve/Reject — only creator or admin */}
@@ -316,21 +369,28 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
 }
 
 // ── Create task form ──────────────────────────────────────────────────────
-function CreateTaskForm({ assignees, myId, canAssign, onSave, onCancel }) {
+function CreateTaskForm({ assignees, role, canAssign, onSave, onCancel }) {
   const toast = useToast();
   const [form, setForm] = useState({
-    title: "", description: "", due_date: "", assigned_to: "",
+    title: "", description: "", due_date: "", assigned_to: "", task_type: "other",
   });
+  const allowedUsers = getAssignableUsers(assignees, role);
+  const canSubmit = canAssign && allowedUsers.length > 0 && Boolean(form.assigned_to);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!canSubmit) {
+      toast.error("Select a valid assignee before creating the task");
+      return;
+    }
     try {
       const payload = {
         title:       form.title,
         description: form.description || undefined,
         priority:    "normal",
-        due_date:    form.due_date,
-        assigned_to: form.assigned_to || undefined,
+        task_type:   form.task_type,
+        due_date:    form.due_date || undefined,
+        assigned_to: form.assigned_to,
       };
       await api.post("/tasks/", payload);
       toast.success("Task created");
@@ -356,20 +416,35 @@ function CreateTaskForm({ assignees, myId, canAssign, onSave, onCancel }) {
         value={form.description} onChange={(e) => f("description", e.target.value)} />
 
       <div>
-        <label className="block text-xs font-semibold text-slate-600 mb-1">Due Date <span className="text-red-500">*</span></label>
-        <input required type="datetime-local"
+        <label className="block text-xs font-semibold text-slate-600 mb-1">Task Type</label>
+        <select
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+          value={form.task_type}
+          onChange={(e) => f("task_type", e.target.value)}
+        >
+          {Object.entries(TASK_TYPE_LABEL).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 mb-1">Due Date</label>
+        <input type="datetime-local"
           className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           value={form.due_date} onChange={(e) => f("due_date", e.target.value)} />
       </div>
 
       {/* Assign to */}
-      {canAssign && assignees.length > 0 && (
+      {canAssign && allowedUsers.length > 0 && (
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1">Assign To</label>
-          <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+          <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
             value={form.assigned_to} onChange={(e) => f("assigned_to", e.target.value)}>
-            <option value="">— Assign to someone (optional) —</option>
-            {assignees.map((u) => (
+            <option value="">Select assignee</option>
+            {allowedUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.full_name} · {ROLE_LABEL[u.role] || u.role}
               </option>
@@ -378,9 +453,15 @@ function CreateTaskForm({ assignees, myId, canAssign, onSave, onCancel }) {
         </div>
       )}
 
+      {canAssign && allowedUsers.length === 0 && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          No valid assignees are available for your role.
+        </p>
+      )}
+
       <div className="flex gap-2">
-        <button type="submit"
-          className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 transition font-medium">
+        <button type="submit" disabled={!canSubmit}
+          className="bg-blue-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-blue-700 transition font-medium disabled:bg-slate-300 disabled:cursor-not-allowed">
           Create Task
         </button>
         <button type="button" onClick={onCancel}
@@ -395,19 +476,18 @@ function CreateTaskForm({ assignees, myId, canAssign, onSave, onCancel }) {
 // ── Main component ────────────────────────────────────────────────────────
 export default function Tasks() {
   const toast = useToast();
-  const role   = localStorage.getItem("role") || "";
   const myUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const role   = localStorage.getItem("role") || myUser.role || myUser.roles?.[0] || "";
   const myId   = myUser.id || "";
 
   const isAdmin    = ["admin", "super_admin"].includes(role);
-  const canSeeAll  = isAdmin || role === "supervisor";
+  const canSeeAll  = isAdmin;
   const canAssign  = isAdmin || ["supervisor", "coordinator", "service_coordinator"].includes(role);
   const canCreate  = canAssign;
 
   const [tasks,       setTasks]       = useState([]);
   const [assignees,   setAssignees]   = useState([]);
   const [loading,     setLoading]     = useState(true);
-  const [acting,      setActing]      = useState(null);
   const [tab,         setTab]         = useState("all");
   const [filter,      setFilter]      = useState("all");
   const [showCreate,  setShowCreate]  = useState(false);
@@ -432,21 +512,18 @@ export default function Tasks() {
   useEffect(() => { load(); }, [load]);
 
   const act = async (endpoint, body = null) => {
-    setActing(endpoint);
     try {
       await (body ? api.post(endpoint, body) : api.post(endpoint));
       toast.success("Done");
-      load();
+      await load();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Action failed");
-    } finally {
-      setActing(null);
     }
   };
 
   const handleAction = (taskId, action) => {
     const endpoint = `/tasks/${taskId}/${action}`;
-    act(endpoint);
+    return act(endpoint);
   };
 
   const handleAssign = (taskId, userId) => {
@@ -471,6 +548,18 @@ export default function Tasks() {
 
   // Count pending-review tasks that this user can act on
   const reviewCount = tasks.filter((t) => t.status === "pending_review" && (isAdmin || t.created_by === myId)).length;
+  const pendingCount = tasks.filter((t) => !["approved"].includes(t.status)).length;
+  const completedCount = tasks.filter((t) => t.status === "approved").length;
+  const overdueCount = tasks.filter((t) => t.due_date && new Date(t.due_date) < new Date() && t.status !== "approved").length;
+  const tasksByRole = tasks.reduce((acc, task) => {
+    const roleKey = task.assigned_to_role || "unassigned";
+    acc[roleKey] = (acc[roleKey] || 0) + 1;
+    return acc;
+  }, {});
+  const roleSummary = Object.entries(tasksByRole)
+    .sort(([, a], [, b]) => b - a)
+    .map(([roleName, count]) => `${ROLE_LABEL[roleName] || roleName}: ${count}`)
+    .join(" / ") || "None";
 
   if (loading) return <Skeleton />;
 
@@ -493,11 +582,21 @@ export default function Tasks() {
         )}
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <MetricCard label="Pending Tasks" value={pendingCount} tone="yellow" />
+        <MetricCard label="Completed Tasks" value={completedCount} tone="green" />
+        <MetricCard label="Overdue Tasks" value={overdueCount} tone={overdueCount > 0 ? "red" : "slate"} />
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tasks by Role</p>
+          <p className="text-sm font-semibold text-slate-700 mt-2 leading-5">{roleSummary}</p>
+        </div>
+      </div>
+
       {/* ── CREATE FORM ── */}
       {showCreate && (
         <CreateTaskForm
           assignees={assignees}
-          myId={myId}
+          role={role}
           canAssign={canAssign}
           onSave={() => { setShowCreate(false); load(); }}
           onCancel={() => setShowCreate(false)}
@@ -527,26 +626,23 @@ export default function Tasks() {
         </div>
       )}
 
-      {/* ── SECTION TABS (admin + supervisor only) ── */}
-      {canSeeAll && (
-        <div className="flex gap-1 border-b border-slate-200">
-          {[
-            { key: "all",   label: "All Tasks" },
-            { key: "board", label: `Team Board${reviewCount > 0 ? ` · ${reviewCount} to review` : ""}` },
-          ].map((s) => (
-            <button key={s.key} onClick={() => setTab(s.key)}
-              className={`text-sm px-5 py-2.5 font-semibold border-b-2 transition ${
-                tab === s.key
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex gap-1 border-b border-slate-200">
+        {[
+          { key: "all",   label: "All Tasks" },
+          ...(canSeeAll ? [{ key: "board", label: `Team Board${reviewCount > 0 ? ` · ${reviewCount} to review` : ""}` }] : []),
+        ].map((s) => (
+          <button key={s.key} onClick={() => setTab(s.key)}
+            className={`text-sm px-5 py-2.5 font-semibold border-b-2 transition ${
+              tab === s.key
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
 
-      {/* ── TEAM BOARD TAB (admin + supervisor only) ── */}
+      {/* ── TEAM BOARD TAB (admin only) ── */}
       {tab === "board" && canSeeAll && (
         <TeamBoard
           tasks={tasks}
@@ -563,7 +659,7 @@ export default function Tasks() {
           {/* Filter chips */}
           <div className="flex gap-2 flex-wrap">
             {[
-              { key: "all",     label: canSeeAll ? `All (${tasks.length})` : `My Tasks (${tasks.length})` },
+              { key: "all",     label: canSeeAll ? `All (${tasks.length})` : `Visible Tasks (${tasks.length})` },
               ...(canSeeAll ? [{ key: "mine",    label: "Assigned to me" }] : []),
               ...(canSeeAll ? [{ key: "pending_review", label: `Needs Review${reviewCount > 0 ? ` (${reviewCount})` : ""}` }] : []),
               { key: "in_progress",    label: "In Progress" },
@@ -598,6 +694,7 @@ export default function Tasks() {
                   onReject={setRejectId}
                   onAssign={canAssign ? handleAssign : null}
                   assignees={assignees}
+                  role={role}
                 />
               ))
             )}

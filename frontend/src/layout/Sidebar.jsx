@@ -1,8 +1,10 @@
 import { NavLink } from "react-router-dom";
+import { TePidIcon } from "../components/TePidLogo";
 
 // Nav items per role — ordered by priority
 const ADMIN_NAV = [
   { to: "/",              label: "Dashboard",      icon: "📊" },
+  { to: "/users",         label: "Users",          icon: "👥" },
   { to: "/approvals",     label: "Approvals",      icon: "✅", badge: true },
   { to: "/tasks",         label: "Tasks",          icon: "📋" },
   { to: "/crm",           label: "CRM",            icon: "🗂️" },
@@ -17,6 +19,7 @@ const NAV = {
   super_admin: ADMIN_NAV,
   supervisor: [
     { to: "/",              label: "Dashboard",      icon: "📊" },
+    { to: "/users",         label: "Users",          icon: "👥" },
     { to: "/approvals",     label: "Approvals",      icon: "✅", badge: true },
     { to: "/tasks",         label: "Tasks",          icon: "📋" },
     { to: "/service-calls", label: "Service Calls",  icon: "📞" },
@@ -32,7 +35,7 @@ const NAV = {
     { to: "/documents",     label: "Documents",      icon: "📄" },
   ],
   finance: [
-    { to: "/",              label: "Dashboard",      icon: "📊" },
+    { to: "/tasks",         label: "My Tasks",       icon: "📋" },
     { to: "/approvals",     label: "Approvals",      icon: "✅", badge: true },
     { to: "/expenses",      label: "Expenses",       icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
@@ -47,6 +50,7 @@ const NAV = {
   ],
   crm: [
     { to: "/",              label: "Dashboard",      icon: "📊" },
+    { to: "/tasks",         label: "My Tasks",       icon: "📋" },
     { to: "/crm",           label: "CRM",            icon: "🗂️" },
     { to: "/expenses",      label: "My Expenses",    icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
@@ -61,7 +65,7 @@ const NAV = {
     { to: "/documents",     label: "Documents",      icon: "📄" },
   ],
   finance_officer: [
-    { to: "/",              label: "Dashboard",      icon: "📊" },
+    { to: "/tasks",         label: "My Tasks",       icon: "📋" },
     { to: "/approvals",     label: "Approvals",      icon: "✅", badge: true },
     { to: "/expenses",      label: "Expenses",       icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
@@ -104,13 +108,17 @@ export default function Sidebar({ role, onLogout }) {
       {/* Brand */}
       <div className="px-5 py-4 border-b border-slate-700/60">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-base shadow-md flex-shrink-0">
-            ⚙
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-white leading-tight">Field Ops</p>
-            <p className="text-xs text-slate-400 leading-tight mt-0.5">Platform</p>
-          </div>
+          <TePidIcon size={36} color="white" />
+          <span style={{
+            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontWeight: 700,
+            fontSize: 20,
+            color: "white",
+            letterSpacing: 1,
+            lineHeight: 1,
+          }}>
+            TePid
+          </span>
         </div>
       </div>
 

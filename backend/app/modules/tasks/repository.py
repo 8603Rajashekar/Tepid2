@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tasks.model import Task
@@ -24,6 +24,18 @@ class TaskRepository:
     async def get_by_assigned_user(db: AsyncSession, user_id: UUID) -> list[Task]:
         result = await db.execute(
             select(Task).where(Task.assigned_to == user_id)
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def get_assigned_to_or_created_by(db: AsyncSession, user_id: UUID) -> list[Task]:
+        result = await db.execute(
+            select(Task).where(
+                or_(
+                    Task.assigned_to == user_id,
+                    Task.created_by == user_id,
+                )
+            )
         )
         return list(result.scalars().all())
 

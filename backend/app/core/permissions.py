@@ -17,13 +17,13 @@ PERMISSIONS: dict[str, dict[str, str]] = {
         "admin":               "full",
         "supervisor":          "team",
         "coordinator":         "team",
-        "finance":             "read",
+        "finance":             "own",
         "employee":            "own",
         "crm":                 "own",
         # legacy
         "super_admin":         "full",
         "service_coordinator": "team",
-        "finance_officer":     "read",
+        "finance_officer":     "own",
     },
     "expenses": {
         "admin":               "full",

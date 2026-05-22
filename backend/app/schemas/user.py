@@ -3,29 +3,31 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr
 
+from app.models.user import UserRole
 
-class UserBase(BaseModel):
+
+class UserCreate(BaseModel):
     full_name: str
     email: EmailStr
-    department: str
-    designation: str | None = None
-    phone: str | None = None
-
-
-class UserCreate(UserBase):
     password: str
+    role: UserRole = UserRole.employee
+    phone: str | None = None
+    department: str = ""
 
 
 class UserUpdate(BaseModel):
     full_name: str | None = None
-    department: str | None = None
-    designation: str | None = None
     phone: str | None = None
+    role: UserRole | None = None
     is_active: bool | None = None
 
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: UUID
+    full_name: str
+    email: str
+    phone: str | None
+    role: UserRole
     is_active: bool
     created_at: datetime
 

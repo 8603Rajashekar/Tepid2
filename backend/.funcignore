@@ -1,0 +1,36 @@
+# Virtual environments
+.venv/
+.venv312/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Logs
+*.log
+logs/
+
+# Tests
+tests/
+test_*.py
+
+# Dev artifacts
+.coverage
+htmlcov/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Azure local settings (contains secrets, not needed on Azure)
+local.settings.json
+
+# VS Code
+.vscode/

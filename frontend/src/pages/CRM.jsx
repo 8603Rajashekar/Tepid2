@@ -15,7 +15,6 @@ const CALL_TYPES = [
   { key: "order",    label: "Order Call",    icon: "🛒",  color: "green"  },
 ];
 
-const PRIORITIES = ["low", "medium", "high", "urgent"];
 const STATUSES   = ["open", "in_progress", "resolved", "closed"];
 
 const STATUS_BADGE = {
@@ -41,7 +40,7 @@ const TYPE_COLOR = {
 
 const BLANK_FORM = {
   call_type: "service", customer_name: "", phone: "", location: "",
-  description: "", priority: "medium",
+  description: "",
   equipment_name: "", urgency: "",
   quantity: "", amount: "", special_requirements: "",
   question: "", response_given: "",
@@ -89,22 +88,6 @@ function Textarea({ label, ...props }) {
         className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
         {...props}
       />
-    </div>
-  );
-}
-
-function Select({ label, required, children, ...props }) {
-  return (
-    <div>
-      <label className="block text-xs font-semibold text-slate-600 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <select
-        className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-        {...props}
-      >
-        {children}
-      </select>
     </div>
   );
 }
@@ -687,9 +670,7 @@ export default function CRM() {
           <div className="grid grid-cols-2 gap-3">
             <Input label="Location" placeholder="City / Area"
               value={form.location} onChange={(e) => set("location", e.target.value)} />
-            <Select label="Priority" value={form.priority} onChange={(e) => set("priority", e.target.value)}>
-              {PRIORITIES.map((p) => <option key={p} value={p} className="capitalize">{p}</option>)}
-            </Select>
+            <div />
           </div>
 
           {/* Dynamic fields by type */}

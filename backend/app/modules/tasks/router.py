@@ -21,6 +21,26 @@ from app.modules.tasks.service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
+ACTIVE_TEAM_EMAILS = {
+    "admin@company.com",
+    "supervisor@company.com",
+    "coordinator@company.com",
+    "finance@company.com",
+    "employee@company.com",
+    "crm@fieldops.com",
+}
+
+
+def _canonical_role(role: UserRole) -> str:
+    role_value = role.value
+    if role_value == "super_admin":
+        return "admin"
+    if role_value == "service_coordinator":
+        return "coordinator"
+    if role_value == "finance":
+        return "finance_officer"
+    return role_value
+
 
 async def _enrich(tasks, db: AsyncSession) -> list[TaskResponse]:
     """Attach assigned_to_name and created_by_name to a list of task ORM objects."""
@@ -31,16 +51,20 @@ async def _enrich(tasks, db: AsyncSession) -> list[TaskResponse]:
             ids.add(t.assigned_to)
         ids.add(t.created_by)
 
-    user_map: dict[UUID, str] = {}
+    user_map: dict[UUID, tuple[str, str]] = {}
     if ids:
-        rows = await db.execute(select(User.id, User.full_name).where(User.id.in_(ids)))
-        user_map = {r.id: r.full_name for r in rows}
+        rows = await db.execute(select(User.id, User.full_name, User.role).where(User.id.in_(ids)))
+        user_map = {r.id: (r.full_name, _canonical_role(r.role)) for r in rows}
 
     results = []
     for t in tasks:
         resp = TaskResponse.model_validate(t)
-        resp.assigned_to_name = user_map.get(t.assigned_to) if t.assigned_to else None
-        resp.created_by_name  = user_map.get(t.created_by)
+        assigned_to = user_map.get(t.assigned_to) if t.assigned_to else None
+        created_by = user_map.get(t.created_by)
+        resp.assigned_to_name = assigned_to[0] if assigned_to else None
+        resp.assigned_to_role = assigned_to[1] if assigned_to else None
+        resp.created_by_name = created_by[0] if created_by else None
+        resp.created_by_role = created_by[1] if created_by else None
         results.append(resp)
     return results
 
@@ -75,23 +99,39 @@ async def get_assignees(
     """Return all users who can be assigned tasks, filtered by caller's role."""
     role = current_user.role
     if role in ("admin", "super_admin"):
-        allowed = [UserRole.admin, UserRole.super_admin, UserRole.supervisor,
-                   UserRole.coordinator, UserRole.employee, UserRole.crm,
-                   UserRole.service_coordinator, UserRole.finance_officer, UserRole.finance]
+        allowed = [
+            UserRole.admin,
+            UserRole.super_admin,
+            UserRole.supervisor,
+            UserRole.coordinator,
+            UserRole.service_coordinator,
+            UserRole.employee,
+            UserRole.crm,
+            UserRole.finance_officer,
+            UserRole.finance,
+        ]
     elif role == "supervisor":
         allowed = [UserRole.coordinator, UserRole.employee,
-                   UserRole.service_coordinator, UserRole.crm]
-    else:
+                   UserRole.service_coordinator]
+    elif role in ("coordinator", "service_coordinator"):
         allowed = [UserRole.employee]
+    else:
+        return []
 
     rows = await db.execute(
         select(User.id, User.full_name, User.role, User.email)
         .where(User.role.in_(allowed))
+        .where(User.email.in_(ACTIVE_TEAM_EMAILS))
         .where(User.is_active == True)
         .order_by(User.full_name)
     )
     return [
-        {"id": str(r.id), "full_name": r.full_name, "role": str(r.role.value), "email": r.email}
+        {
+            "id": str(r.id),
+            "full_name": r.full_name,
+            "role": _canonical_role(r.role),
+            "email": r.email,
+        }
         for r in rows
     ]
 

@@ -1,0 +1,48 @@
+# Frontend — not part of Azure Functions deployment
+frontend/
+node_modules/
+
+# Python virtual environments
+.venv/
+.venv312/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Uploads / user data
+uploads/
+
+# Logs
+*.log
+logs/
+
+# Git
+.git/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+AzureCLI.msi
+
+# Azure local settings (secrets)
+backend/local.settings.json
+local.settings.json
+
+# Tests
+tests/
+test_*.py
+
+# Dev artifacts
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.pytest_cache/

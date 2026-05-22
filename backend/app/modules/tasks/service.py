@@ -4,8 +4,9 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import check_permission, has_permission, require_role
+from app.core.permissions import check_permission
 from app.core.security import TokenUser
+from app.models.user import User
 from app.modules.audit_log.service import AuditLogService
 from app.modules.analytics.ws import manager as ws_manager
 from app.modules.notifications.service import NotificationService
@@ -38,6 +39,53 @@ _PRIORITY_WEIGHT: dict[str, int] = {
     TaskPriority.low:      1,
 }
 
+ADMIN_ROLES = {"admin", "super_admin"}
+COORDINATOR_ROLES = {"coordinator", "service_coordinator"}
+SUPERVISOR_ROLES = {"supervisor"}
+EMPLOYEE_ROLES = {"employee"}
+ASSIGNEE_ROLES = {"employee", "crm", "finance", "finance_officer"}
+
+
+def _role_name(role: object) -> str:
+    return getattr(role, "value", str(role))
+
+
+def validate_assignment(assigner: TokenUser, target_user: User) -> bool:
+    assigner_role = assigner.role
+    target_role = _role_name(target_user.role)
+
+    if assigner_role in ADMIN_ROLES:
+        return True
+
+    if assigner_role in COORDINATOR_ROLES:
+        return target_role in EMPLOYEE_ROLES
+
+    if assigner_role in SUPERVISOR_ROLES:
+        return target_role in EMPLOYEE_ROLES | COORDINATOR_ROLES
+
+    return False
+
+
+async def _fetch_assignment_target(db: AsyncSession, user_id: UUID) -> User:
+    target_user = await db.get(User, user_id)
+    if not target_user or not target_user.is_active:
+        raise HTTPException(status_code=404, detail="Assigned user not found")
+    return target_user
+
+
+async def _ensure_assignment_allowed(
+    db: AsyncSession,
+    current_user: TokenUser,
+    assigned_to: UUID | None,
+) -> User:
+    if assigned_to is None:
+        raise HTTPException(status_code=422, detail="assigned_to is required")
+
+    target_user = await _fetch_assignment_target(db, assigned_to)
+    if not validate_assignment(current_user, target_user):
+        raise HTTPException(status_code=403, detail="Not allowed to assign this user")
+    return target_user
+
 
 def _validate_transition(current: TaskStatus, new: TaskStatus) -> None:
     allowed = ALLOWED_TRANSITIONS.get(current, [])
@@ -51,6 +99,11 @@ def _validate_transition(current: TaskStatus, new: TaskStatus) -> None:
 def _compute_efficiency(task: Task, completed_at: datetime) -> tuple[int, float]:
     """Return (delay_minutes, efficiency_score)."""
     due = task.due_date
+    weight = _PRIORITY_WEIGHT.get(task.priority, 1)
+
+    if due is None:
+        return 0, float(100 * weight)
+
     # Make both timezone-aware for comparison
     if due.tzinfo is None:
         due = due.replace(tzinfo=UTC)
@@ -58,7 +111,6 @@ def _compute_efficiency(task: Task, completed_at: datetime) -> tuple[int, float]
     delay_seconds = (completed_at - due).total_seconds()
     delay_minutes = int(delay_seconds / 60)
 
-    weight = _PRIORITY_WEIGHT.get(task.priority, 1)
     # On-time or early → full score; late → 0
     score = float(100 * weight if delay_minutes <= 0 else 0)
 
@@ -83,11 +135,8 @@ class TaskService:
         check_permission(current_user, "tasks", "own")
 
         current_user_id = UUID(current_user.id)
-
-        # Non-team roles can only create tasks for themselves
-        if not has_permission(current_user, "tasks", "team"):
-            if data.assigned_to and data.assigned_to != current_user_id:
-                raise HTTPException(status_code=403, detail="You can only assign tasks to yourself")
+        await _ensure_assignment_allowed(db, current_user, data.assigned_to)
+        assigned_at = datetime.now(UTC)
 
         task = Task(
             title=data.title,
@@ -95,6 +144,9 @@ class TaskService:
             assigned_to=data.assigned_to,
             created_by=current_user_id,
             priority=data.priority,
+            task_type=data.task_type,
+            status=TaskStatus.assigned,
+            assigned_at=assigned_at,
             due_date=data.due_date,
         )
         task = await TaskRepository.create(db, task)
@@ -102,7 +154,11 @@ class TaskService:
         await AuditLogService.log(
             db, actor_id=current_user_id, module="tasks",
             action="task_created", record_id=str(task.id),
-            after_data={"title": task.title, "status": task.status},
+            after_data={
+                "title": task.title,
+                "status": task.status,
+                "task_type": task.task_type,
+            },
         )
 
         if task.assigned_to:
@@ -122,14 +178,23 @@ class TaskService:
     async def assign_task(
         db: AsyncSession, task_id: UUID, data: TaskAssign, current_user: TokenUser,
     ) -> Task:
-        require_role(current_user, "coordinator", "supervisor", "service_coordinator")
+        await _ensure_assignment_allowed(db, current_user, data.assigned_to)
         task = await _fetch(db, task_id)
-        _validate_transition(task.status, TaskStatus.assigned)
+        if task.status not in (TaskStatus.new, TaskStatus.assigned):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid transition: {task.status} → {TaskStatus.assigned}. "
+                    "Allowed: ['new', 'assigned']"
+                ),
+            )
 
         prev_assignee = task.assigned_to
+        now = datetime.now(UTC)
         task.assigned_to = data.assigned_to
         task.status = TaskStatus.assigned
-        task.updated_at = datetime.now(UTC)
+        task.assigned_at = now
+        task.updated_at = now
 
         await AuditLogService.log(
             db, actor_id=UUID(current_user.id), module="tasks",
@@ -141,7 +206,10 @@ class TaskService:
         await NotificationService.send_email(
             to=str(data.assigned_to),
             subject="Task Assigned to You",
-            body=f"Task '{task.title}' has been assigned to you. Due: {task.due_date.date()}",
+            body=(
+                f"Task '{task.title}' has been assigned to you."
+                + (f" Due: {task.due_date.date()}" if task.due_date else "")
+            ),
         )
 
         return await TaskRepository.update(db, task)
@@ -157,7 +225,7 @@ class TaskService:
         _validate_transition(task.status, TaskStatus.in_progress)
 
         current_user_id = UUID(current_user.id)
-        if task.assigned_to != current_user_id and not has_permission(current_user, "tasks", "team"):
+        if task.assigned_to != current_user_id:
             raise HTTPException(status_code=403, detail="Only the assigned employee can start this task")
 
         now = datetime.now(UTC)
@@ -184,7 +252,7 @@ class TaskService:
         _validate_transition(task.status, TaskStatus.pending_review)
 
         current_user_id = UUID(current_user.id)
-        if task.assigned_to != current_user_id and not has_permission(current_user, "tasks", "team"):
+        if task.assigned_to != current_user_id:
             raise HTTPException(status_code=403, detail="Only the assigned employee can submit this task")
 
         completed_at = datetime.now(UTC)
@@ -295,9 +363,11 @@ class TaskService:
 
         # Auto-reassign back to the same employee so they can rework it
         _validate_transition(TaskStatus.rejected, TaskStatus.assigned)
+        reassigned_at = datetime.now(UTC)
         task.status = TaskStatus.assigned
+        task.assigned_at = reassigned_at
         task.completed_at = None
-        task.updated_at = datetime.now(UTC)
+        task.updated_at = reassigned_at
 
         await NotificationService.send_email(
             to=str(task.assigned_to),
@@ -324,8 +394,8 @@ class TaskService:
         task = await _fetch(db, task_id)
 
         is_assignee = task.assigned_to == UUID(current_user.id)
-        if not has_permission(current_user, "tasks", "team") and not is_assignee:
-            raise HTTPException(status_code=403, detail="You can only update status of your own tasks")
+        if not is_assignee:
+            raise HTTPException(status_code=403, detail="Only assignee can update")
 
         _validate_transition(task.status, data.status)
 
@@ -364,11 +434,18 @@ class TaskService:
     @staticmethod
     async def get_tasks(db: AsyncSession, current_user: TokenUser) -> list[Task]:
         check_permission(current_user, "tasks", "read")
-        # Only admin and supervisor see all tasks
-        if current_user.role in ("admin", "super_admin", "supervisor"):
+        current_user_id = UUID(current_user.id)
+
+        if current_user.role in ADMIN_ROLES:
             return await TaskRepository.get_all(db)
-        # Everyone else sees only tasks assigned to them
-        return await TaskRepository.get_by_assigned_user(db, UUID(current_user.id))
+
+        if current_user.role in COORDINATOR_ROLES | SUPERVISOR_ROLES:
+            return await TaskRepository.get_assigned_to_or_created_by(db, current_user_id)
+
+        if current_user.role in ASSIGNEE_ROLES:
+            return await TaskRepository.get_by_assigned_user(db, current_user_id)
+
+        return []
 
     @staticmethod
     async def get_my_tasks(db: AsyncSession, current_user: TokenUser) -> list[Task]:
@@ -379,10 +456,20 @@ class TaskService:
     async def get_task(db: AsyncSession, task_id: UUID, current_user: TokenUser) -> Task:
         check_permission(current_user, "tasks", "read")
         task = await _fetch(db, task_id)
-        if has_permission(current_user, "tasks", "own") and not has_permission(current_user, "tasks", "team"):
-            if task.assigned_to != UUID(current_user.id) and task.created_by != UUID(current_user.id):
-                raise HTTPException(status_code=403, detail="You can only view your own tasks")
-        return task
+
+        current_user_id = UUID(current_user.id)
+        if current_user.role in ADMIN_ROLES:
+            return task
+
+        if current_user.role in COORDINATOR_ROLES | SUPERVISOR_ROLES:
+            if task.assigned_to == current_user_id or task.created_by == current_user_id:
+                return task
+            raise HTTPException(status_code=403, detail="You can only view tasks you assigned or own")
+
+        if current_user.role in ASSIGNEE_ROLES and task.assigned_to == current_user_id:
+            return task
+
+        raise HTTPException(status_code=403, detail="You can only view your own tasks")
 
     @staticmethod
     async def update_task(
@@ -391,10 +478,18 @@ class TaskService:
         check_permission(current_user, "tasks", "own")
         task = await _fetch(db, task_id)
 
-        if not has_permission(current_user, "tasks", "team") and task.created_by != UUID(current_user.id):
-            raise HTTPException(status_code=403, detail="You can only update tasks you created")
+        current_user_id = UUID(current_user.id)
+        if current_user.role not in ADMIN_ROLES | COORDINATOR_ROLES | SUPERVISOR_ROLES:
+            raise HTTPException(status_code=403, detail="Not allowed to update tasks")
 
-        for field, value in data.model_dump(exclude_unset=True).items():
+        if current_user.role not in ADMIN_ROLES and task.created_by != current_user_id:
+            raise HTTPException(status_code=403, detail="You can only update tasks you assigned")
+
+        values = data.model_dump(exclude_unset=True)
+        if "assigned_to" in values:
+            await _ensure_assignment_allowed(db, current_user, values["assigned_to"])
+
+        for field, value in values.items():
             setattr(task, field, value)
         task.updated_at = datetime.now(UTC)
 

@@ -32,24 +32,27 @@ class UserService:
     async def create_user(
         db: AsyncSession,
         payload: UserCreate,
+        current_user=None,
     ):
-        existing_user = await UserRepository.get_by_email(
-            db,
-            payload.email,
-        )
+        # Supervisors may only create employee / coordinator / crm accounts
+        SUPERVISOR_ALLOWED = {"employee", "coordinator", "crm"}
+        if current_user and current_user.role == "supervisor":
+            if payload.role.value not in SUPERVISOR_ALLOWED:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Supervisors can only create Employee, Coordinator, or CRM accounts",
+                )
 
+        existing_user = await UserRepository.get_by_email(db, payload.email)
         if existing_user:
-            raise HTTPException(
-                status_code=400,
-                detail="Email already exists",
-            )
+            raise HTTPException(status_code=400, detail="Email already exists")
 
         user = User(
             full_name=payload.full_name,
             email=payload.email,
             department=payload.department,
-            designation=payload.designation,
             phone=payload.phone,
+            role=payload.role,
             password_hash=hash_password(payload.password),
         )
 

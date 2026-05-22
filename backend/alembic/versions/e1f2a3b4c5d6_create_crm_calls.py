@@ -6,7 +6,7 @@ Create Date: 2026-05-21
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 revision = 'e1f2a3b4c5d6'
 down_revision = None
@@ -15,12 +15,26 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    call_type = ENUM('service', 'issue', 'enquiry', 'order', name='calltype')
+    call_status = ENUM('open', 'in_progress', 'resolved', 'closed', name='callstatus')
+    call_priority = ENUM('low', 'medium', 'high', 'urgent', name='callpriority')
+
+    call_type.create(bind, checkfirst=True)
+    call_status.create(bind, checkfirst=True)
+    call_priority.create(bind, checkfirst=True)
+
+    if 'crm_calls' in inspector.get_table_names():
+        return
+
     op.create_table(
         'crm_calls',
         sa.Column('id', UUID(as_uuid=True), primary_key=True),
-        sa.Column('call_type',  sa.Enum('service','issue','enquiry','order', name='calltype'),  nullable=False),
-        sa.Column('status',     sa.Enum('open','in_progress','resolved','closed', name='callstatus'),   nullable=False, server_default='open'),
-        sa.Column('priority',   sa.Enum('low','medium','high','urgent', name='callpriority'), nullable=False, server_default='medium'),
+        sa.Column('call_type',  ENUM('service','issue','enquiry','order', name='calltype', create_type=False),  nullable=False),
+        sa.Column('status',     ENUM('open','in_progress','resolved','closed', name='callstatus', create_type=False),   nullable=False, server_default='open'),
+        sa.Column('priority',   ENUM('low','medium','high','urgent', name='callpriority', create_type=False), nullable=False, server_default='medium'),
         sa.Column('customer_name', sa.String(200), nullable=False),
         sa.Column('phone',         sa.String(20),  nullable=False),
         sa.Column('location',      sa.String(300), nullable=True),

@@ -27,6 +27,14 @@ class TaskStatus(str, enum.Enum):
     rejected = "rejected"
 
 
+class TaskType(str, enum.Enum):
+    service = "service"
+    issue = "issue"
+    inspection = "inspection"
+    installation = "installation"
+    other = "other"
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -61,18 +69,29 @@ class Task(Base):
         default=TaskPriority.normal,
     )
 
+    task_type: Mapped[TaskType] = mapped_column(
+        Enum(TaskType),
+        nullable=False,
+        default=TaskType.other,
+    )
+
     status: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus),
         nullable=False,
         default=TaskStatus.new,
     )
 
-    due_date: Mapped[datetime] = mapped_column(
+    due_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        nullable=True,
     )
 
     # ⏱️ Workflow Tracking
+    assigned_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

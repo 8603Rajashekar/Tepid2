@@ -4,20 +4,21 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.modules.tasks.model import TaskPriority, TaskStatus
+from app.modules.tasks.model import TaskPriority, TaskStatus, TaskType
 
 
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
-    assigned_to: Optional[UUID] = None
+    assigned_to: UUID
     priority: TaskPriority = TaskPriority.normal
-    due_date: datetime
+    task_type: TaskType = TaskType.other
+    due_date: Optional[datetime] = None
 
     @field_validator("due_date")
     @classmethod
-    def validate_due_date(cls, v: datetime) -> datetime:
-        if v <= datetime.utcnow():
+    def validate_due_date(cls, v: datetime | None) -> datetime | None:
+        if v is not None and v <= datetime.utcnow():
             raise ValueError("due_date must be in the future")
         return v
 
@@ -27,6 +28,7 @@ class TaskUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=2000)
     assigned_to: Optional[UUID] = None
     priority: Optional[TaskPriority] = None
+    task_type: Optional[TaskType] = None
     due_date: Optional[datetime] = None
 
     @field_validator("due_date")
@@ -79,9 +81,11 @@ class TaskResponse(BaseModel):
     created_by: UUID
     assigned_to: Optional[UUID]
     priority: TaskPriority
+    task_type: TaskType
     status: TaskStatus
-    due_date: datetime
+    due_date: Optional[datetime]
 
+    assigned_at: Optional[datetime]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     time_spent_minutes: Optional[int]
@@ -99,6 +103,8 @@ class TaskResponse(BaseModel):
     # Enriched display fields — populated by the router/service, not stored in DB
     assigned_to_name: Optional[str] = None
     created_by_name: Optional[str] = None
+    assigned_to_role: Optional[str] = None
+    created_by_role: Optional[str] = None
 
     class Config:
         from_attributes = True

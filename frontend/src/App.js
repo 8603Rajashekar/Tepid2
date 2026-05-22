@@ -16,9 +16,10 @@ import Documents     from "./pages/Documents";
 import Expenses      from "./pages/Expenses";
 import Approvals     from "./pages/Approvals";
 import CRM           from "./pages/CRM";
+import Users         from "./pages/Users";
 
 // Role sets for route guards
-const FULL_ACCESS    = new Set(["admin", "super_admin", "supervisor", "coordinator", "finance", "service_coordinator", "finance_officer", "crm"]);
+const FULL_ACCESS    = new Set(["admin", "super_admin", "supervisor", "coordinator", "service_coordinator", "crm"]);
 const SERVICE_ROLES  = new Set(["admin", "super_admin", "supervisor", "coordinator", "service_coordinator"]);
 const APPROVAL_ROLES = new Set(["admin", "super_admin", "supervisor", "finance", "finance_officer"]);
 const CRM_ROLES      = new Set(["admin", "super_admin", "crm"]);
@@ -44,6 +45,7 @@ export default function App() {
 
   const isEmployee = role === "employee" || role === "agent" || !FULL_ACCESS.has(role);
   const isCRM      = role === "crm";
+  const isFinance  = role === "finance" || role === "finance_officer";
   const homeRoute  = "/";
 
   return (
@@ -55,6 +57,8 @@ export default function App() {
             element={
               isCRM
                 ? wrap(<CRMDashboard />)
+                : isFinance
+                ? wrap(<Tasks />)
                 : isEmployee
                 ? wrap(<EmployeeDashboard />)
                 : FULL_ACCESS.has(role)
@@ -89,6 +93,11 @@ export default function App() {
           {/* CRM — admin / super_admin / crm agent only */}
           <Route path="/crm"
             element={CRM_ROLES.has(role) ? wrap(<CRM />) : <Navigate to={homeRoute} replace />}
+          />
+
+          {/* User Management — admin + supervisor */}
+          <Route path="/users"
+            element={["admin", "super_admin", "supervisor"].includes(role) ? wrap(<Users />) : <Navigate to={homeRoute} replace />}
           />
 
           {/* Catch-all */}
