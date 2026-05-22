@@ -7,6 +7,7 @@ import Layout        from "./layout/Layout";
 
 import Dashboard         from "./pages/Dashboard";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
+import CRMDashboard      from "./pages/CRMDashboard";
 import Tasks             from "./pages/Tasks";
 import ServiceCalls  from "./pages/ServiceCalls";
 import WorkDashboard from "./pages/WorkDashboard";
@@ -18,8 +19,9 @@ import CRM           from "./pages/CRM";
 
 // Role sets for route guards
 const FULL_ACCESS    = new Set(["admin", "super_admin", "supervisor", "coordinator", "finance", "service_coordinator", "finance_officer", "crm"]);
-const SERVICE_ROLES  = new Set(["admin", "super_admin", "supervisor", "coordinator", "service_coordinator", "crm"]);
+const SERVICE_ROLES  = new Set(["admin", "super_admin", "supervisor", "coordinator", "service_coordinator"]);
 const APPROVAL_ROLES = new Set(["admin", "super_admin", "supervisor", "finance", "finance_officer"]);
+const CRM_ROLES      = new Set(["admin", "super_admin", "crm"]);
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -41,6 +43,7 @@ export default function App() {
   );
 
   const isEmployee = role === "employee" || role === "agent" || !FULL_ACCESS.has(role);
+  const isCRM      = role === "crm";
   const homeRoute  = "/";
 
   return (
@@ -50,7 +53,9 @@ export default function App() {
           {/* Dashboard — role-based */}
           <Route path="/"
             element={
-              isEmployee
+              isCRM
+                ? wrap(<CRMDashboard />)
+                : isEmployee
                 ? wrap(<EmployeeDashboard />)
                 : FULL_ACCESS.has(role)
                 ? wrap(<Dashboard />)
@@ -81,8 +86,10 @@ export default function App() {
           <Route path="/work-reports" element={wrap(<WorkDashboard />)} />
           <Route path="/report"       element={wrap(<CreateReport />)} />
 
-          {/* CRM — coordinator / admin / supervisor */}
-          <Route path="/crm" element={wrap(<CRM />)} />
+          {/* CRM — admin / super_admin / crm agent only */}
+          <Route path="/crm"
+            element={CRM_ROLES.has(role) ? wrap(<CRM />) : <Navigate to={homeRoute} replace />}
+          />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to={homeRoute} replace />} />

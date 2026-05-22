@@ -1,11 +1,13 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
 from app.core.security import TokenUser
 from app.db.session import get_db
+from app.models.user import User, UserRole
 from app.modules.tasks.schema import (
     TaskApproval,
     TaskAssign,
@@ -20,6 +22,29 @@ from app.modules.tasks.service import TaskService
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 
+async def _enrich(tasks, db: AsyncSession) -> list[TaskResponse]:
+    """Attach assigned_to_name and created_by_name to a list of task ORM objects."""
+    # Collect all UUIDs we need to look up
+    ids = set()
+    for t in tasks:
+        if t.assigned_to:
+            ids.add(t.assigned_to)
+        ids.add(t.created_by)
+
+    user_map: dict[UUID, str] = {}
+    if ids:
+        rows = await db.execute(select(User.id, User.full_name).where(User.id.in_(ids)))
+        user_map = {r.id: r.full_name for r in rows}
+
+    results = []
+    for t in tasks:
+        resp = TaskResponse.model_validate(t)
+        resp.assigned_to_name = user_map.get(t.assigned_to) if t.assigned_to else None
+        resp.created_by_name  = user_map.get(t.created_by)
+        results.append(resp)
+    return results
+
+
 # ── CRUD ──────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=TaskResponse, status_code=201)
@@ -28,7 +53,9 @@ async def create_task(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    return await TaskService.create_task(db, data, current_user)
+    task = await TaskService.create_task(db, data, current_user)
+    enriched = await _enrich([task], db)
+    return enriched[0]
 
 
 @router.get("/my", response_model=list[TaskResponse])
@@ -36,7 +63,37 @@ async def get_my_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    return await TaskService.get_my_tasks(db, current_user)
+    tasks = await TaskService.get_my_tasks(db, current_user)
+    return await _enrich(tasks, db)
+
+
+@router.get("/assignees", response_model=list[dict])
+async def get_assignees(
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+):
+    """Return all users who can be assigned tasks, filtered by caller's role."""
+    role = current_user.role
+    if role in ("admin", "super_admin"):
+        allowed = [UserRole.admin, UserRole.super_admin, UserRole.supervisor,
+                   UserRole.coordinator, UserRole.employee, UserRole.crm,
+                   UserRole.service_coordinator, UserRole.finance_officer, UserRole.finance]
+    elif role == "supervisor":
+        allowed = [UserRole.coordinator, UserRole.employee,
+                   UserRole.service_coordinator, UserRole.crm]
+    else:
+        allowed = [UserRole.employee]
+
+    rows = await db.execute(
+        select(User.id, User.full_name, User.role, User.email)
+        .where(User.role.in_(allowed))
+        .where(User.is_active == True)
+        .order_by(User.full_name)
+    )
+    return [
+        {"id": str(r.id), "full_name": r.full_name, "role": str(r.role.value), "email": r.email}
+        for r in rows
+    ]
 
 
 @router.get("/", response_model=list[TaskResponse])
@@ -44,7 +101,8 @@ async def get_tasks(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    return await TaskService.get_tasks(db, current_user)
+    tasks = await TaskService.get_tasks(db, current_user)
+    return await _enrich(tasks, db)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -53,7 +111,9 @@ async def get_task(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    return await TaskService.get_task(db, task_id, current_user)
+    task = await TaskService.get_task(db, task_id, current_user)
+    enriched = await _enrich([task], db)
+    return enriched[0]
 
 
 @router.put("/{task_id}", response_model=TaskResponse)
@@ -75,8 +135,10 @@ async def assign_task(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    """Admin / supervisor assigns a new task to an employee. (new → assigned)"""
-    return await TaskService.assign_task(db, task_id, data, current_user)
+    """Admin / supervisor / coordinator assigns a task to someone. (new → assigned)"""
+    task = await TaskService.assign_task(db, task_id, data, current_user)
+    enriched = await _enrich([task], db)
+    return enriched[0]
 
 
 @router.post("/{task_id}/start", response_model=TaskResponse)
@@ -86,7 +148,9 @@ async def start_task(
     current_user: TokenUser = Depends(get_current_user),
 ):
     """Assigned employee starts work. (assigned → in_progress)"""
-    return await TaskService.start_task(db, task_id, current_user)
+    task = await TaskService.start_task(db, task_id, current_user)
+    enriched = await _enrich([task], db)
+    return enriched[0]
 
 
 @router.post("/{task_id}/submit", response_model=TaskResponse)
@@ -96,7 +160,9 @@ async def submit_task(
     current_user: TokenUser = Depends(get_current_user),
 ):
     """Employee submits completed work for review. Calculates efficiency score. (in_progress → pending_review)"""
-    return await TaskService.submit_task(db, task_id, current_user)
+    task = await TaskService.submit_task(db, task_id, current_user)
+    enriched = await _enrich([task], db)
+    return enriched[0]
 
 
 @router.post("/{task_id}/approve", response_model=TaskResponse)
@@ -105,8 +171,10 @@ async def approve_task(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    """Supervisor / admin approves the submitted work. (pending_review → approved)"""
-    return await TaskService.approve_task_action(db, task_id, current_user)
+    """Task creator / admin approves the submitted work. (pending_review → approved)"""
+    task = await TaskService.approve_task_action(db, task_id, current_user)
+    enriched = await _enrich([task], db)
+    return enriched[0]
 
 
 @router.post("/{task_id}/reject", response_model=TaskResponse)
@@ -116,8 +184,10 @@ async def reject_task(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    """Supervisor / admin rejects work with a reason. Task auto-returns to assigned. (pending_review → rejected → assigned)"""
-    return await TaskService.reject_task_action(db, task_id, data, current_user)
+    """Task creator / admin rejects work with a reason. Task auto-returns to assigned."""
+    task = await TaskService.reject_task_action(db, task_id, data, current_user)
+    enriched = await _enrich([task], db)
+    return enriched[0]
 
 
 # ── LEGACY (kept for frontend backward-compat) ────────────────────────

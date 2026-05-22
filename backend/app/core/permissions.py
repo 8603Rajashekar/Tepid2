@@ -19,7 +19,7 @@ PERMISSIONS: dict[str, dict[str, str]] = {
         "coordinator":         "team",
         "finance":             "read",
         "employee":            "own",
-        "crm":                 "read",
+        "crm":                 "own",
         # legacy
         "super_admin":         "full",
         "service_coordinator": "team",

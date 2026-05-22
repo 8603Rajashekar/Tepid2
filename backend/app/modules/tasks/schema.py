@@ -82,7 +82,10 @@ class TaskResponse(BaseModel):
     status: TaskStatus
     due_date: datetime
 
+    started_at: Optional[datetime]
     completed_at: Optional[datetime]
+    time_spent_minutes: Optional[int]
+
     approved_by: Optional[UUID]
     approved_at: Optional[datetime]
     rejection_reason: Optional[str]
@@ -92,6 +95,10 @@ class TaskResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+
+    # Enriched display fields — populated by the router/service, not stored in DB
+    assigned_to_name: Optional[str] = None
+    created_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True

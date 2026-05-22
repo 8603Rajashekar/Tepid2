@@ -19,7 +19,6 @@ const NAV = {
     { to: "/",              label: "Dashboard",      icon: "📊" },
     { to: "/approvals",     label: "Approvals",      icon: "✅", badge: true },
     { to: "/tasks",         label: "Tasks",          icon: "📋" },
-    { to: "/crm",           label: "CRM",            icon: "🗂️" },
     { to: "/service-calls", label: "Service Calls",  icon: "📞" },
     { to: "/expenses",      label: "Expenses",       icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
@@ -28,7 +27,6 @@ const NAV = {
   coordinator: [
     { to: "/",              label: "Dashboard",      icon: "📊" },
     { to: "/tasks",         label: "Tasks",          icon: "📋" },
-    { to: "/crm",           label: "CRM",            icon: "🗂️" },
     { to: "/service-calls", label: "Service Calls",  icon: "📞" },
     { to: "/expenses",      label: "My Expenses",    icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
@@ -50,9 +48,9 @@ const NAV = {
   crm: [
     { to: "/",              label: "Dashboard",      icon: "📊" },
     { to: "/crm",           label: "CRM",            icon: "🗂️" },
-    { to: "/service-calls", label: "Service Calls",  icon: "📞" },
     { to: "/expenses",      label: "My Expenses",    icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
+    { to: "/work-reports",  label: "Work Reports",   icon: "📝" },
   ],
   // legacy aliases
   service_coordinator: [

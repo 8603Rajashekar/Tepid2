@@ -21,7 +21,8 @@ UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv",
-                      ".jpg", ".jpeg", ".png", ".gif", ".zip", ".txt"}
+                      ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
+                      ".zip", ".txt"}
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 

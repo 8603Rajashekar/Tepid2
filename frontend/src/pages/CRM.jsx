@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis,
 } from "recharts";
 import api from "../api/api";
 import { useToast } from "../context/ToastContext";
@@ -45,6 +46,14 @@ const BLANK_FORM = {
   quantity: "", amount: "", special_requirements: "",
   question: "", response_given: "",
   follow_up_date: "",
+};
+
+const BLANK_REPORT = {
+  report_date:   new Date().toISOString().slice(0, 10),
+  hours_logged:  "",
+  summary:       "",
+  blockers:      "",
+  tomorrow_plan: "",
 };
 
 // ── Small components ───────────────────────────────────────────────────
@@ -168,11 +177,237 @@ function DynamicFields({ callType, form, set }) {
   return null;
 }
 
+// ── Work Reports Section ───────────────────────────────────────────────
+
+function WorkReportsSection() {
+  const toast = useToast();
+  const [reports,     setReports]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showForm,    setShowForm]    = useState(false);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [reportForm,  setReportForm]  = useState({ ...BLANK_REPORT });
+  const role = localStorage.getItem("role") || "";
+  const canViewAll = ["admin", "super_admin", "supervisor"].includes(role);
+  const [tab, setTab] = useState("my");
+
+  const loadReports = useCallback(async () => {
+    setLoading(true);
+    try {
+      const endpoint = tab === "team" ? "/reports/team" : "/reports/me";
+      const res = await api.get(endpoint);
+      setReports(res.data);
+    } catch {
+      toast.error("Failed to load work reports");
+    } finally {
+      setLoading(false);
+    }
+  }, [tab, toast]);
+
+  useEffect(() => { loadReports(); }, [loadReports]);
+
+  const handleReportSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api.post("/reports/", {
+        ...reportForm,
+        hours_logged: parseFloat(reportForm.hours_logged),
+      });
+      toast.success("Work report submitted");
+      setShowForm(false);
+      setReportForm({ ...BLANK_REPORT });
+      loadReports();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Submission failed");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const totalHours = reports.reduce((s, r) => s + r.hours_logged, 0).toFixed(1);
+  const withBlockers = reports.filter((r) => r.blockers?.trim()).length;
+  const chartData = [...reports].slice(0, 10).reverse().map((r) => ({
+    date:  new Date(r.report_date).toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
+    hours: r.hours_logged,
+  }));
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-slate-800">Work Reports</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Submit and review your daily work reports</p>
+        </div>
+        <button
+          onClick={() => { setShowForm(!showForm); setReportForm({ ...BLANK_REPORT }); }}
+          className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
+        >
+          + Submit Report
+        </button>
+      </div>
+
+      {/* Submit form */}
+      {showForm && (
+        <form onSubmit={handleReportSubmit}
+          className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <h3 className="font-semibold text-slate-800">End-of-Day Work Report</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Date</label>
+              <input type="date" required
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                value={reportForm.report_date}
+                onChange={(e) => setReportForm((f) => ({ ...f, report_date: e.target.value }))} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Hours Logged <span className="text-slate-400 font-normal">(max 12)</span></label>
+              <input type="number" required min="0.5" max="12" step="0.5"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                placeholder="e.g. 8"
+                value={reportForm.hours_logged}
+                onChange={(e) => setReportForm((f) => ({ ...f, hours_logged: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">
+              Summary <span className="text-red-500">*</span> <span className="text-slate-400 font-normal">(min 10 chars)</span>
+            </label>
+            <textarea required minLength={10} rows={3}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="What did you accomplish today? Calls handled, issues resolved, follow-ups done…"
+              value={reportForm.summary}
+              onChange={(e) => setReportForm((f) => ({ ...f, summary: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Blockers <span className="text-slate-400 font-normal">(optional)</span></label>
+            <textarea rows={2}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="Any issues, pending escalations, or unresolved calls?"
+              value={reportForm.blockers}
+              onChange={(e) => setReportForm((f) => ({ ...f, blockers: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Tomorrow's Plan <span className="text-slate-400 font-normal">(optional)</span></label>
+            <textarea rows={2}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="Follow-ups to call, tasks planned for tomorrow…"
+              value={reportForm.tomorrow_plan}
+              onChange={(e) => setReportForm((f) => ({ ...f, tomorrow_plan: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={submitting}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded-lg font-medium transition disabled:opacity-60">
+              {submitting ? "Submitting…" : "Submit Report"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)}
+              className="text-sm text-slate-500 px-4 py-2 rounded-lg border border-slate-300 hover:border-slate-400 transition">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Team / My tabs for admin */}
+      {canViewAll && (
+        <div className="flex gap-1 border-b border-slate-200">
+          {["my", "team"].map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`text-sm px-4 py-2 font-medium border-b-2 transition ${
+                tab === t ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}>
+              {t === "my" ? "My Reports" : "Team Reports"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-3 animate-pulse">
+          {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-slate-100 rounded-xl border" />)}
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="text-center py-14 bg-white rounded-xl border border-slate-200">
+          <p className="text-3xl mb-2">📝</p>
+          <p className="text-slate-400 text-sm">No work reports yet</p>
+          <button onClick={() => setShowForm(true)}
+            className="mt-3 text-blue-600 text-sm hover:underline font-medium">
+            Submit your first report →
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+              <p className="text-2xl font-bold text-blue-600">{reports.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Total Reports</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+              <p className="text-2xl font-bold text-green-600">{totalHours}h</p>
+              <p className="text-xs text-slate-500 mt-0.5">Total Hours</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+              <p className="text-2xl font-bold text-orange-500">{withBlockers}</p>
+              <p className="text-xs text-slate-500 mt-0.5">With Blockers</p>
+            </div>
+          </div>
+
+          {/* Bar chart */}
+          {chartData.length > 1 && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Daily Hours</h3>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={chartData} barSize={18}>
+                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 12]} allowDecimals={false} tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={(v) => [`${v}h`, "Hours"]} />
+                  <Bar dataKey="hours" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Report list */}
+          <div className="space-y-3">
+            {reports.map((r) => (
+              <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-4 hover:border-slate-300 transition">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="font-semibold text-slate-800">
+                      {new Date(r.report_date).toLocaleDateString("en-IN", { weekday: "long", month: "short", day: "numeric" })}
+                    </p>
+                    <p className="text-xs text-slate-400">{r.hours_logged}h logged
+                      {r.user_name && <span> · {r.user_name}</span>}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-700 mb-2">{r.summary}</p>
+                {r.blockers && (
+                  <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-xs text-red-700 mb-2">
+                    <span className="font-semibold">Blocker:</span> {r.blockers}
+                  </div>
+                )}
+                {r.tomorrow_plan && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
+                    <span className="font-semibold">Tomorrow:</span> {r.tomorrow_plan}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────
 
 export default function CRM() {
   const toast = useToast();
 
+  const [section,      setSection]      = useState("calls");
   const [calls,        setCalls]        = useState([]);
   const [followups,    setFollowups]    = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -280,16 +515,41 @@ export default function CRM() {
       {/* ── HEADER ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">CRM — Call Log</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Service · Issue · Enquiry · Order</p>
+          <h1 className="text-xl font-bold text-slate-800">CRM</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Call Log · Work Reports</p>
         </div>
-        <button
-          onClick={() => { setShowCreate(!showCreate); setForm({ ...BLANK_FORM }); }}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
-        >
-          + Log Call
-        </button>
+        {section === "calls" && (
+          <button
+            onClick={() => { setShowCreate(!showCreate); setForm({ ...BLANK_FORM }); }}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-medium transition"
+          >
+            + Log Call
+          </button>
+        )}
       </div>
+
+      {/* ── SECTION TABS ── */}
+      <div className="flex gap-1 border-b border-slate-200">
+        {[
+          { key: "calls",   label: "📞 Call Log"      },
+          { key: "reports", label: "📝 Work Reports"  },
+        ].map((s) => (
+          <button key={s.key} onClick={() => setSection(s.key)}
+            className={`text-sm px-5 py-2.5 font-semibold border-b-2 transition ${
+              section === s.key
+                ? "border-blue-600 text-blue-600"
+                : "border-transparent text-slate-500 hover:text-slate-700"
+            }`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── WORK REPORTS SECTION ── */}
+      {section === "reports" && <WorkReportsSection />}
+
+      {/* ── CALL LOG SECTION ── */}
+      {section === "calls" && (<>
 
       {/* ── FOLLOW-UP ALERTS ── */}
       {followups.length > 0 && (
@@ -574,6 +834,8 @@ export default function CRM() {
           })}
         </div>
       )}
+      </>)}
+
     </div>
   );
 }

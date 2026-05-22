@@ -73,10 +73,17 @@ class Task(Base):
     )
 
     # ⏱️ Workflow Tracking
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
+
+    time_spent_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

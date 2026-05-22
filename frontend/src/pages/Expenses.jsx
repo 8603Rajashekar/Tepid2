@@ -4,6 +4,92 @@ import { useToast } from "../context/ToastContext";
 import ApprovalHistory from "../components/approvals/ApprovalHistory";
 import ApprovalModal from "../components/approvals/ApprovalModal";
 
+const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"]);
+
+function fileExt(url = "") {
+  return (url.split(".").pop() || "").toLowerCase().replace(/\?.*$/, "");
+}
+
+function isImage(url = "") {
+  return IMAGE_EXTS.has("." + fileExt(url));
+}
+
+function receiptSrc(url) {
+  if (!url) return null;
+  return url.startsWith("/uploads")
+    ? `${process.env.REACT_APP_API_URL}${url}`
+    : url;
+}
+
+// ── Upload zone ────────────────────────────────────────────────────────
+function UploadZone({ file, onChange, required }) {
+  const ref    = useRef(null);
+  const [drag, setDrag] = useState(false);
+  const preview = file && file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+
+  const accept = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip";
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-600 mb-1">
+        Proof / Supporting Document
+        {required
+          ? <span className="ml-1 text-red-500">* Required (amount &gt; ₹999)</span>
+          : <span className="ml-1 text-slate-400 font-normal">(optional — image, PDF, doc)</span>
+        }
+      </label>
+
+      {file ? (
+        <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+          {preview
+            ? <img src={preview} alt="preview" className="w-16 h-16 object-cover rounded-lg border border-slate-200 flex-shrink-0" />
+            : <div className="w-16 h-16 flex items-center justify-center bg-white border border-slate-200 rounded-lg text-2xl flex-shrink-0">📄</div>
+          }
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-800 truncate">{file.name}</p>
+            <p className="text-xs text-slate-400">{(file.size / 1024).toFixed(0)} KB</p>
+          </div>
+          <button type="button" onClick={() => { onChange(null); if (ref.current) ref.current.value = ""; }}
+            className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded-md hover:bg-red-50 transition flex-shrink-0">
+            Remove
+          </button>
+        </div>
+      ) : (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onChange(f); }}
+          onClick={() => ref.current?.click()}
+          className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl py-6 px-4 cursor-pointer transition select-none ${
+            drag ? "border-blue-400 bg-blue-50" : "border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50"
+          }`}
+        >
+          <span className="text-3xl">📸</span>
+          <p className="text-sm font-semibold text-slate-700">Tap to attach proof</p>
+          <p className="text-xs text-slate-400">Screenshot, photo, PDF or document</p>
+          <p className="text-xs text-slate-300">JPG · PNG · PDF · DOC · XLSX</p>
+        </div>
+      )}
+
+      {/* Hidden inputs — one for gallery/files, one for camera on mobile */}
+      <input ref={ref} type="file" accept={accept} className="hidden"
+        onChange={(e) => onChange(e.target.files[0] || null)} />
+
+      {!file && (
+        <label className="mt-2 flex items-center justify-center gap-2 text-xs text-blue-600 font-medium cursor-pointer hover:underline">
+          <input type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={(e) => onChange(e.target.files[0] || null)} />
+          📷 Use camera
+        </label>
+      )}
+
+      {required && !file && (
+        <p className="text-xs text-red-500 mt-1">Please attach a receipt or invoice before submitting</p>
+      )}
+    </div>
+  );
+}
+
 const STATUS_BADGE = {
   draft:               "bg-slate-100 text-slate-600",
   submitted:           "bg-yellow-100 text-yellow-700",
@@ -52,17 +138,19 @@ export default function Expenses() {
 
   const toast    = useToast();
   const user     = JSON.parse(localStorage.getItem("user") || "{}");
-  const fileRef  = useRef(null);
 
-  const [expenses,     setExpenses]     = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState(null);
-  const [showCreate,   setShowCreate]   = useState(false);
-  const [acting,       setActing]       = useState(null);
-  const [historyId,    setHistoryId]    = useState(null);
-  const [receiptFile,  setReceiptFile]  = useState(null);
-  const [approvalModal,setApprovalModal]= useState(null); // { expId, action, label, endpoint }
-  const [form,         setForm]         = useState({
+  const [expenses,      setExpenses]      = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(null);
+  const [showCreate,    setShowCreate]    = useState(false);
+  const [acting,        setActing]        = useState(null);
+  const [historyId,     setHistoryId]     = useState(null);
+  const [receiptFile,   setReceiptFile]   = useState(null);
+  const [attachFor,     setAttachFor]     = useState(null);   // expense id to attach proof to
+  const [attachFile,    setAttachFile]    = useState(null);
+  const [approvalModal, setApprovalModal] = useState(null);   // { expId, action, label, endpoint }
+  const [lightbox,      setLightbox]      = useState(null);   // image url to show fullscreen
+  const [form,          setForm]          = useState({
     title: "", category: "other", amount: "", currency: "USD", description: "",
   });
 
@@ -97,6 +185,14 @@ export default function Expenses() {
     }
   };
 
+  const uploadFile = async (expenseId, file) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    await api.post(`/expenses/${expenseId}/receipt`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (receiptRequired && !receiptFile) {
@@ -105,24 +201,30 @@ export default function Expenses() {
     }
     try {
       const res = await api.post("/expenses/", { ...form, amount: parseFloat(form.amount) });
-      const expenseId = res.data.id;
-
-      if (receiptFile) {
-        const fd = new FormData();
-        fd.append("file", receiptFile);
-        await api.post(`/expenses/${expenseId}/receipt`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-      }
-
+      if (receiptFile) await uploadFile(res.data.id, receiptFile);
       setForm({ title: "", category: "other", amount: "", currency: "USD", description: "" });
       setReceiptFile(null);
-      if (fileRef.current) fileRef.current.value = "";
       setShowCreate(false);
       toast.success("Expense created");
       load();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Create failed");
+    }
+  };
+
+  const handleAttachProof = async (expenseId) => {
+    if (!attachFile) return;
+    setActing(`attach-${expenseId}`);
+    try {
+      await uploadFile(expenseId, attachFile);
+      toast.success("Proof attached");
+      setAttachFor(null);
+      setAttachFile(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Upload failed");
+    } finally {
+      setActing(null);
     }
   };
 
@@ -196,35 +298,28 @@ export default function Expenses() {
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
             value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
 
-          {/* Receipt / Document */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
-              Supporting Document
-              {receiptRequired
-                ? <span className="ml-1 text-red-500 font-semibold">* Required (amount &gt; ₹999)</span>
-                : <span className="ml-1 text-slate-400 font-normal">(optional)</span>
-              }
-            </label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.jpg,.jpeg,.png,.gif,.zip,.txt"
-              onChange={(e) => setReceiptFile(e.target.files[0] || null)}
-              className="w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
-            />
-            {receiptFile && (
-              <p className="text-xs text-green-600 mt-1">✓ {receiptFile.name}</p>
-            )}
-            {receiptRequired && !receiptFile && (
-              <p className="text-xs text-red-500 mt-1">Please attach a receipt or invoice</p>
-            )}
-          </div>
+          <UploadZone file={receiptFile} onChange={setReceiptFile} required={receiptRequired} />
 
           <div className="flex gap-2">
             <button type="submit" className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition">Create</button>
-            <button type="button" onClick={() => { setShowCreate(false); setReceiptFile(null); if (fileRef.current) fileRef.current.value = ""; }} className="text-sm text-slate-500 px-4 py-2 rounded-lg border border-slate-300 hover:border-slate-400 transition">Cancel</button>
+            <button type="button" onClick={() => { setShowCreate(false); setReceiptFile(null); }}
+              className="text-sm text-slate-500 px-4 py-2 rounded-lg border border-slate-300 hover:border-slate-400 transition">Cancel</button>
           </div>
         </form>
+      )}
+
+      {/* Lightbox for image proof */}
+      {lightbox && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setLightbox(null)}>
+          <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setLightbox(null)}
+              className="absolute -top-8 right-0 text-white text-sm font-medium hover:text-slate-300">
+              ✕ Close
+            </button>
+            <img src={lightbox} alt="proof" className="w-full rounded-xl shadow-2xl max-h-[80vh] object-contain" />
+          </div>
+        </div>
       )}
 
       {/* Approval / Reject modal with digital signature */}
@@ -263,18 +358,58 @@ export default function Expenses() {
 
                 {ex.description && <p className="text-xs text-slate-500 mb-2">{ex.description}</p>}
 
-                {/* Receipt / document link */}
-                {ex.receipt_url && (
-                  <a
-                    href={ex.receipt_url.startsWith("/uploads")
-                      ? `${process.env.REACT_APP_API_URL}${ex.receipt_url}`
-                      : ex.receipt_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline mb-2"
-                  >
-                    📎 View Receipt
-                  </a>
+                {/* Proof / receipt display */}
+                {ex.receipt_url ? (
+                  <div className="mb-2">
+                    {isImage(ex.receipt_url) ? (
+                      <button type="button" onClick={() => setLightbox(receiptSrc(ex.receipt_url))}
+                        className="block group relative">
+                        <img
+                          src={receiptSrc(ex.receipt_url)}
+                          alt="proof"
+                          className="h-24 w-auto max-w-[180px] rounded-lg border border-slate-200 object-cover group-hover:opacity-90 transition"
+                        />
+                        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                          <span className="bg-black/50 text-white text-xs rounded-md px-2 py-1">🔍 View</span>
+                        </span>
+                      </button>
+                    ) : (
+                      <a
+                        href={receiptSrc(ex.receipt_url)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-200 px-3 py-1.5 rounded-lg transition font-medium"
+                      >
+                        📎 View Proof ({fileExt(ex.receipt_url).toUpperCase()})
+                      </a>
+                    )}
+                  </div>
+                ) : ex.status === "draft" && (
+                  <div className="mb-2">
+                    {attachFor === ex.id ? (
+                      <div className="space-y-2">
+                        <UploadZone file={attachFile} onChange={setAttachFile} required={false} />
+                        <div className="flex gap-2">
+                          <button type="button"
+                            disabled={!attachFile || acting === `attach-${ex.id}`}
+                            onClick={() => handleAttachProof(ex.id)}
+                            className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50">
+                            {acting === `attach-${ex.id}` ? "Uploading…" : "Upload Proof"}
+                          </button>
+                          <button type="button" onClick={() => { setAttachFor(null); setAttachFile(null); }}
+                            className="text-xs text-slate-500 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 transition">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button"
+                        onClick={() => { setAttachFor(ex.id); setAttachFile(null); }}
+                        className="text-xs text-blue-500 hover:text-blue-700 font-medium hover:underline flex items-center gap-1">
+                        📎 Attach proof
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {ex.rejection_reason && (

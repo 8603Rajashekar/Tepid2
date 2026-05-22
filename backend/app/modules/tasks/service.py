@@ -122,7 +122,7 @@ class TaskService:
     async def assign_task(
         db: AsyncSession, task_id: UUID, data: TaskAssign, current_user: TokenUser,
     ) -> Task:
-        require_role(current_user, "coordinator", "service_coordinator")
+        require_role(current_user, "coordinator", "supervisor", "service_coordinator")
         task = await _fetch(db, task_id)
         _validate_transition(task.status, TaskStatus.assigned)
 
@@ -160,8 +160,10 @@ class TaskService:
         if task.assigned_to != current_user_id and not has_permission(current_user, "tasks", "team"):
             raise HTTPException(status_code=403, detail="Only the assigned employee can start this task")
 
-        task.status = TaskStatus.in_progress
-        task.updated_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        task.status     = TaskStatus.in_progress
+        task.started_at = now
+        task.updated_at = now
 
         await AuditLogService.log(
             db, actor_id=current_user_id, module="tasks",
@@ -188,19 +190,28 @@ class TaskService:
         completed_at = datetime.now(UTC)
         delay_minutes, efficiency_score = _compute_efficiency(task, completed_at)
 
-        task.status = TaskStatus.pending_review
-        task.completed_at = completed_at
-        task.delay_minutes = delay_minutes
-        task.efficiency_score = efficiency_score
-        task.updated_at = completed_at
+        # Auto-calculate time spent from when work was started
+        time_spent_minutes: int | None = None
+        if task.started_at:
+            started = task.started_at
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=UTC)
+            time_spent_minutes = max(0, int((completed_at - started).total_seconds() / 60))
+
+        task.status             = TaskStatus.pending_review
+        task.completed_at       = completed_at
+        task.time_spent_minutes = time_spent_minutes
+        task.delay_minutes      = delay_minutes
+        task.efficiency_score   = efficiency_score
+        task.updated_at         = completed_at
 
         await AuditLogService.log(
             db, actor_id=current_user_id, module="tasks",
             action="task_submitted", record_id=str(task.id),
             after_data={
                 "status": TaskStatus.pending_review,
+                "time_spent_minutes": time_spent_minutes,
                 "delay_minutes": delay_minutes,
-                "efficiency_score": efficiency_score,
             },
         )
         return await TaskRepository.update(db, task)
@@ -213,12 +224,22 @@ class TaskService:
     async def approve_task_action(
         db: AsyncSession, task_id: UUID, current_user: TokenUser,
     ) -> Task:
-        require_role(current_user, "supervisor")
-        check_permission(current_user, "tasks", "team")
+        check_permission(current_user, "tasks", "own")
         task = await _fetch(db, task_id)
+
+        current_user_id = UUID(current_user.id)
+        is_admin = current_user.role in ("admin", "super_admin")
+        is_creator = task.created_by == current_user_id
+
+        if not is_admin and not is_creator:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the person who assigned this task (or an admin) can approve it",
+            )
+
         _validate_transition(task.status, TaskStatus.approved)
 
-        approver_id = UUID(current_user.id)
+        approver_id = current_user_id
         task.status = TaskStatus.approved
         task.approved_by = approver_id
         task.approved_at = datetime.now(UTC)
@@ -246,12 +267,22 @@ class TaskService:
     async def reject_task_action(
         db: AsyncSession, task_id: UUID, data: TaskReject, current_user: TokenUser,
     ) -> Task:
-        require_role(current_user, "supervisor")
-        check_permission(current_user, "tasks", "team")
+        check_permission(current_user, "tasks", "own")
         task = await _fetch(db, task_id)
+
+        current_user_id = UUID(current_user.id)
+        is_admin = current_user.role in ("admin", "super_admin")
+        is_creator = task.created_by == current_user_id
+
+        if not is_admin and not is_creator:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the person who assigned this task (or an admin) can reject it",
+            )
+
         _validate_transition(task.status, TaskStatus.rejected)
 
-        rejector_id = UUID(current_user.id)
+        rejector_id = current_user_id
         task.status = TaskStatus.rejected
         task.rejection_reason = data.rejection_reason
         task.updated_at = datetime.now(UTC)
@@ -333,9 +364,11 @@ class TaskService:
     @staticmethod
     async def get_tasks(db: AsyncSession, current_user: TokenUser) -> list[Task]:
         check_permission(current_user, "tasks", "read")
-        if has_permission(current_user, "tasks", "own") and not has_permission(current_user, "tasks", "team"):
-            return await TaskRepository.get_by_assigned_user(db, UUID(current_user.id))
-        return await TaskRepository.get_all(db)
+        # Only admin and supervisor see all tasks
+        if current_user.role in ("admin", "super_admin", "supervisor"):
+            return await TaskRepository.get_all(db)
+        # Everyone else sees only tasks assigned to them
+        return await TaskRepository.get_by_assigned_user(db, UUID(current_user.id))
 
     @staticmethod
     async def get_my_tasks(db: AsyncSession, current_user: TokenUser) -> list[Task]:
