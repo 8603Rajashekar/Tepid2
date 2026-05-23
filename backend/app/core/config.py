@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     AZURE_AD_B2C_ISSUER: str | None = None
     AZURE_AD_B2C_JWKS_URL: str | None = None
 
+    AZURE_STORAGE_CONNECTION_STRING: str | None = None
+
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=15, ge=1)
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, ge=1)
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"

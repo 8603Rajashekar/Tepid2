@@ -13,7 +13,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", os.getenv("SYNC_DATABASE_URL"))
+_db_url = os.getenv("SYNC_DATABASE_URL", "")
+config.set_main_option("sqlalchemy.url", _db_url.replace("%", "%%"))
 
 from app.db.base import Base
 from app.models.audit_log import AuditLog  # noqa: F401
@@ -40,18 +41,15 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    from sqlalchemy import create_engine
+    connectable = create_engine(_db_url, poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
+            transaction_per_migration=True,
         )
-        with context.begin_transaction():
-            context.run_migrations()
+        context.run_migrations()
 
 
 if context.is_offline_mode():

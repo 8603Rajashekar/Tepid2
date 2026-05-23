@@ -21,15 +21,6 @@ from app.modules.tasks.service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
-ACTIVE_TEAM_EMAILS = {
-    "admin@company.com",
-    "supervisor@company.com",
-    "coordinator@company.com",
-    "finance@company.com",
-    "employee@company.com",
-    "crm@fieldops.com",
-}
-
 
 def _canonical_role(role: UserRole) -> str:
     role_value = role.value
@@ -112,7 +103,7 @@ async def get_assignees(
         ]
     elif role == "supervisor":
         allowed = [UserRole.coordinator, UserRole.employee,
-                   UserRole.service_coordinator]
+                   UserRole.service_coordinator, UserRole.crm]
     elif role in ("coordinator", "service_coordinator"):
         allowed = [UserRole.employee]
     else:
@@ -121,7 +112,6 @@ async def get_assignees(
     rows = await db.execute(
         select(User.id, User.full_name, User.role, User.email)
         .where(User.role.in_(allowed))
-        .where(User.email.in_(ACTIVE_TEAM_EMAILS))
         .where(User.is_active == True)
         .order_by(User.full_name)
     )

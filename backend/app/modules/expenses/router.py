@@ -1,11 +1,11 @@
-import shutil
 import uuid as _uuid
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.core.security import TokenUser
 from app.db.session import get_db
@@ -17,12 +17,11 @@ from app.modules.expenses.schema import (
 )
 from app.modules.expenses.service import ExpenseService
 
-UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
-
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv",
                       ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
                       ".zip", ".txt"}
+
+BLOB_CONTAINER = "expense-proofs"
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
@@ -161,17 +160,53 @@ async def upload_receipt(
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    """Attach a supporting document to an expense (required when amount > ₹1,000)."""
-    from fastapi import HTTPException
+    """Attach a supporting document. Stored in Azure Blob Storage via REST API."""
+    import base64, hashlib, hmac, urllib.parse
+    from datetime import datetime, UTC
+    import httpx
+
     suffix = Path(file.filename or "file").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"File type '{suffix}' not allowed")
 
-    file_id = str(_uuid.uuid4())
-    safe_name = f"receipt_{file_id}{suffix}"
-    dest = UPLOAD_DIR / safe_name
-    with dest.open("wb") as buf:
-        shutil.copyfileobj(file.file, buf)
+    conn_str = getattr(settings, "AZURE_STORAGE_CONNECTION_STRING", None)
+    if not conn_str:
+        raise HTTPException(status_code=500, detail="Storage not configured")
 
-    receipt_url = f"/uploads/{safe_name}"
-    return await ExpenseService.attach_receipt(db, expense_id, receipt_url, current_user)
+    # Parse connection string
+    parts = dict(p.split("=", 1) for p in conn_str.split(";") if "=" in p)
+    account = parts.get("AccountName", "")
+    key_b64 = parts.get("AccountKey", "")
+
+    blob_name = f"receipt_{_uuid.uuid4()}{suffix}"
+    content_type = file.content_type or "application/octet-stream"
+    data = await file.read()
+    content_length = str(len(data))
+    url = f"https://{account}.blob.core.windows.net/{BLOB_CONTAINER}/{blob_name}"
+
+    # Build Shared Key signature
+    date_str = datetime.now(UTC).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    string_to_sign = (
+        f"PUT\n\n\n{content_length}\n\n{content_type}\n\n\n\n\n\n\n"
+        f"x-ms-blob-type:BlockBlob\nx-ms-date:{date_str}\nx-ms-version:2020-08-04\n"
+        f"/{account}/{BLOB_CONTAINER}/{blob_name}"
+    )
+    sig = base64.b64encode(
+        hmac.new(base64.b64decode(key_b64), string_to_sign.encode("utf-8"), hashlib.sha256).digest()
+    ).decode()
+
+    headers = {
+        "x-ms-date": date_str,
+        "x-ms-version": "2020-08-04",
+        "x-ms-blob-type": "BlockBlob",
+        "Content-Type": content_type,
+        "Content-Length": content_length,
+        "Authorization": f"SharedKey {account}:{sig}",
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.put(url, content=data, headers=headers, timeout=60)
+        if resp.status_code not in (200, 201):
+            raise HTTPException(status_code=500, detail=f"Blob upload failed: {resp.text[:200]}")
+
+    return await ExpenseService.attach_receipt(db, expense_id, url, current_user)

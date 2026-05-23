@@ -4,21 +4,33 @@ import { useToast } from "../context/ToastContext";
 import ApprovalHistory from "../components/approvals/ApprovalHistory";
 import ApprovalModal from "../components/approvals/ApprovalModal";
 
-const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"]);
+const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif"]);
+const PDF_EXTS   = new Set([".pdf"]);
+const DOC_EXTS   = new Set([".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt"]);
 
 function fileExt(url = "") {
-  return (url.split(".").pop() || "").toLowerCase().replace(/\?.*$/, "");
+  try {
+    const path = new URL(url).pathname;
+    return ("." + path.split(".").pop()).toLowerCase();
+  } catch {
+    return ("." + url.split(".").pop()).toLowerCase().replace(/\?.*$/, "");
+  }
 }
 
-function isImage(url = "") {
-  return IMAGE_EXTS.has("." + fileExt(url));
-}
+function isImage(url = "") { return IMAGE_EXTS.has(fileExt(url)); }
+function isPdf(url = "")   { return PDF_EXTS.has(fileExt(url)); }
+function isDoc(url = "")   { return DOC_EXTS.has(fileExt(url)); }
 
 function receiptSrc(url) {
   if (!url) return null;
-  return url.startsWith("/uploads")
-    ? `${process.env.REACT_APP_API_URL}${url}`
-    : url;
+  // Azure Blob URLs are already absolute; legacy /uploads paths get the API prefix
+  return url.startsWith("http") ? url : `${process.env.REACT_APP_API_URL}${url}`;
+}
+
+function proofIcon(url) {
+  if (isPdf(url)) return "📄";
+  if (isDoc(url)) return "📊";
+  return "📎";
 }
 
 // ── Upload zone ────────────────────────────────────────────────────────
@@ -200,15 +212,25 @@ export default function Expenses() {
       return;
     }
     try {
+      // Step 1 — create the expense record
       const res = await api.post("/expenses/", { ...form, amount: parseFloat(form.amount) });
-      if (receiptFile) await uploadFile(res.data.id, receiptFile);
+
+      // Step 2 — upload proof separately (failure here does NOT block the expense)
+      if (receiptFile) {
+        try {
+          await uploadFile(res.data.id, receiptFile);
+        } catch {
+          toast.error("Expense created, but proof upload failed — please re-attach proof from the expense card.");
+        }
+      }
+
       setForm({ title: "", category: "other", amount: "", currency: "USD", description: "" });
       setReceiptFile(null);
       setShowCreate(false);
-      toast.success("Expense created");
+      toast.success("Expense created successfully");
       load();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Create failed");
+      toast.error(err.response?.data?.detail || "Failed to create expense");
     }
   };
 
@@ -310,14 +332,24 @@ export default function Expenses() {
 
       {/* Lightbox for image proof */}
       {lightbox && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
           onClick={() => setLightbox(null)}>
-          <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setLightbox(null)}
-              className="absolute -top-8 right-0 text-white text-sm font-medium hover:text-slate-300">
-              ✕ Close
-            </button>
-            <img src={lightbox} alt="proof" className="w-full rounded-xl shadow-2xl max-h-[80vh] object-contain" />
+          <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-white text-sm font-medium">Expense Proof</span>
+              <div className="flex items-center gap-3">
+                <a href={lightbox} target="_blank" rel="noreferrer"
+                  className="text-white/70 text-xs hover:text-white transition">
+                  ↗ Open original
+                </a>
+                <button onClick={() => setLightbox(null)}
+                  className="text-white text-sm font-medium hover:text-slate-300 bg-white/10 px-3 py-1 rounded-lg">
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+            <img src={lightbox} alt="expense proof"
+              className="w-full rounded-xl shadow-2xl max-h-[80vh] object-contain bg-white/5" />
           </div>
         </div>
       )}
@@ -362,29 +394,61 @@ export default function Expenses() {
                 {ex.receipt_url ? (
                   <div className="mb-2">
                     {isImage(ex.receipt_url) ? (
+                      /* ── Image: thumbnail + click to enlarge ── */
                       <button type="button" onClick={() => setLightbox(receiptSrc(ex.receipt_url))}
                         className="block group relative">
                         <img
                           src={receiptSrc(ex.receipt_url)}
-                          alt="proof"
-                          className="h-24 w-auto max-w-[180px] rounded-lg border border-slate-200 object-cover group-hover:opacity-90 transition"
+                          alt="expense proof"
+                          className="h-28 w-auto max-w-[220px] rounded-xl border border-slate-200 object-cover group-hover:opacity-90 transition shadow-sm"
+                          onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
                         />
-                        <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-                          <span className="bg-black/50 text-white text-xs rounded-md px-2 py-1">🔍 View</span>
+                        {/* fallback shown if image fails */}
+                        <div style={{ display: "none" }}
+                          className="h-28 w-[220px] rounded-xl border border-slate-200 bg-slate-50 items-center justify-center text-slate-400 text-sm">
+                          🖼 Image unavailable
+                        </div>
+                        <span className="absolute top-1 right-1 bg-black/50 text-white text-xs rounded-md px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition">
+                          🔍 Enlarge
                         </span>
                       </button>
+                    ) : isPdf(ex.receipt_url) ? (
+                      /* ── PDF: inline preview + open link ── */
+                      <div className="rounded-xl border border-slate-200 overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
+                          <span className="text-xs font-semibold text-slate-600">📄 PDF Proof</span>
+                          <a href={receiptSrc(ex.receipt_url)} target="_blank" rel="noreferrer"
+                            className="text-xs text-blue-600 font-medium hover:underline">
+                            Open ↗
+                          </a>
+                        </div>
+                        <iframe
+                          src={receiptSrc(ex.receipt_url)}
+                          title="PDF proof"
+                          className="w-full"
+                          style={{ height: 260, border: "none" }}
+                        />
+                      </div>
                     ) : (
+                      /* ── Doc / Excel / other: download link ── */
                       <a
                         href={receiptSrc(ex.receipt_url)}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 text-blue-600 hover:bg-blue-50 hover:border-blue-200 px-3 py-1.5 rounded-lg transition font-medium"
+                        className="inline-flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300 px-4 py-2.5 rounded-xl transition font-medium shadow-sm"
                       >
-                        📎 View Proof ({fileExt(ex.receipt_url).toUpperCase()})
+                        <span className="text-lg">{proofIcon(ex.receipt_url)}</span>
+                        <span>
+                          View Proof
+                          <span className="ml-1 text-xs text-slate-400 font-normal uppercase">
+                            {fileExt(ex.receipt_url).replace(".", "")}
+                          </span>
+                        </span>
+                        <span className="text-slate-400 text-xs ml-1">↗</span>
                       </a>
                     )}
                   </div>
-                ) : ex.status === "draft" && (
+                ) : ["draft", "submitted"].includes(ex.status) && (
                   <div className="mb-2">
                     {attachFor === ex.id ? (
                       <div className="space-y-2">

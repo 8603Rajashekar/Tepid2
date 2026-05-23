@@ -61,7 +61,7 @@ def validate_assignment(assigner: TokenUser, target_user: User) -> bool:
         return target_role in EMPLOYEE_ROLES
 
     if assigner_role in SUPERVISOR_ROLES:
-        return target_role in EMPLOYEE_ROLES | COORDINATOR_ROLES
+        return target_role in EMPLOYEE_ROLES | COORDINATOR_ROLES | {"crm"}
 
     return False
 

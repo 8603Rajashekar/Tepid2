@@ -20,16 +20,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'documents',
-        sa.Column('folder_id', postgresql.UUID(as_uuid=True), nullable=True),
-    )
-    op.add_column(
-        'documents',
-        sa.Column('version', sa.Integer(), nullable=False, server_default='1'),
-    )
+    pass  # columns already added by a1b2c3d4e5f6
 
 
 def downgrade() -> None:
-    op.drop_column('documents', 'version')
-    op.drop_column('documents', 'folder_id')
+    pass

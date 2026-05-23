@@ -52,7 +52,7 @@ const TASK_TYPE_LABEL = {
 const ASSIGNABLE_ROLES = {
   admin:               ["admin","supervisor","coordinator","finance_officer","employee","crm"],
   super_admin:         ["admin","supervisor","coordinator","finance_officer","employee","crm"],
-  supervisor:          ["coordinator","employee"],
+  supervisor:          ["coordinator","employee","crm"],
   coordinator:         ["employee"],
   service_coordinator: ["employee"],
 };
@@ -251,12 +251,13 @@ function LiveTimer({ startedAt }) {
 }
 
 // ── Single task row (used in both list and team board) ────────────────────
-function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssign, assignees, role }) {
+function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssign, assignees }) {
   const [showAssign, setShowAssign] = useState(false);
   const [assignTo,   setAssignTo]   = useState("");
 
   const canApproveThis = isAdmin || t.created_by === myId;
-  const allowedUsers = getAssignableUsers(assignees || [], role);
+  // Backend already filters assignees by role — use the list directly
+  const allowedUsers = assignees || [];
 
   const handleAssign = () => {
     if (!assignTo) return;
@@ -369,12 +370,13 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
 }
 
 // ── Create task form ──────────────────────────────────────────────────────
-function CreateTaskForm({ assignees, role, canAssign, onSave, onCancel }) {
+function CreateTaskForm({ assignees, canAssign, onSave, onCancel }) {
   const toast = useToast();
   const [form, setForm] = useState({
     title: "", description: "", due_date: "", assigned_to: "", task_type: "other",
   });
-  const allowedUsers = getAssignableUsers(assignees, role);
+  // Backend already filters assignees by role — use the list directly
+  const allowedUsers = assignees;
   const canSubmit = canAssign && allowedUsers.length > 0 && Boolean(form.assigned_to);
 
   const handleSubmit = async (e) => {
@@ -596,7 +598,6 @@ export default function Tasks() {
       {showCreate && (
         <CreateTaskForm
           assignees={assignees}
-          role={role}
           canAssign={canAssign}
           onSave={() => { setShowCreate(false); load(); }}
           onCancel={() => setShowCreate(false)}
@@ -694,7 +695,6 @@ export default function Tasks() {
                   onReject={setRejectId}
                   onAssign={canAssign ? handleAssign : null}
                   assignees={assignees}
-                  role={role}
                 />
               ))
             )}

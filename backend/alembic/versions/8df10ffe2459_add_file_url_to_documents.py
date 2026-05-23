@@ -19,12 +19,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'documents',
-        sa.Column('file_url', sa.String(2000), nullable=False, server_default=''),
-    )
-    # Remove the server default after backfill so new rows must supply a value
-    op.alter_column('documents', 'file_url', server_default=None)
+    conn = op.get_bind()
+    col_exists = conn.execute(sa.text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='documents' AND column_name='file_url'"
+    )).scalar()
+    if not col_exists:
+        op.add_column(
+            'documents',
+            sa.Column('file_url', sa.String(2000), nullable=False, server_default=''),
+        )
+        op.alter_column('documents', 'file_url', server_default=None)
 
 
 def downgrade() -> None:

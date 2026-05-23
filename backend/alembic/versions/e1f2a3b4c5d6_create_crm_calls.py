@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 
 revision = 'e1f2a3b4c5d6'
-down_revision = None
+down_revision = '920924dd9cd7'
 branch_labels = ('crm',)
 depends_on = None
 
