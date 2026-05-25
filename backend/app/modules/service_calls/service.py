@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.permissions import check_permission, has_permission, require_role
 from app.core.security import TokenUser
 from app.modules.audit_log.service import AuditLogService
-from app.modules.notifications.service import NotificationService
+from app.modules.notifications.service import NotificationService, create_notification, notify_role
 from app.modules.service_calls.model import ServiceCall, ServiceStatus
 from app.modules.service_calls.schema import ServiceCallCreate, ServiceCallResolve
 from app.modules.service_calls.sla import get_sla, sla_elapsed_minutes, is_breached, should_escalate
@@ -67,6 +67,12 @@ class ServiceCallService:
             after_data={"title": call.title, "priority": call.priority, "status": call.status},
         )
         await db.commit()
+
+        # Notify admins + supervisors: new service call needs assignment
+        await notify_role(
+            ["admin", "super_admin", "supervisor"],
+            f"📞 New service call: '{call.title}' [{call.priority} priority] by {current_user.email}",
+        )
         return _enrich(call)
 
     # ------------------------------------------------------------------
@@ -195,6 +201,12 @@ class ServiceCallService:
             after_data={"notes": data.resolution_notes},
         )
         await db.commit()
+
+        # Notify admins + supervisors: call resolved, ready to close
+        await notify_role(
+            ["admin", "super_admin", "supervisor"],
+            f"✅ Service call resolved: '{call.title}' — ready to close",
+        )
         return _enrich(call)
 
     # ------------------------------------------------------------------
@@ -258,4 +270,10 @@ class ServiceCallService:
             after_data={"status": call.status},
         )
         await db.commit()
+
+        # Notify admins: escalation needs immediate attention
+        await notify_role(
+            ["admin", "super_admin"],
+            f"🚨 Service call ESCALATED: '{call.title}' — immediate attention required",
+        )
         return _enrich(call)

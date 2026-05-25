@@ -8,17 +8,45 @@ from app.modules.notifications.model import Notification
 
 async def create_notification(user_id: UUID, message: str) -> None:
     """
-    Persist a notification using its OWN session so it always commits,
-    regardless of what the caller's session has already committed or not.
+    Persist a single notification using its own session.
     Never raises — a notification failure must never break business logic.
     """
-    from app.db.session import AsyncSessionLocal   # local import avoids circular dep
+    from app.db.session import AsyncSessionLocal
     try:
         async with AsyncSessionLocal() as db:
             db.add(Notification(user_id=user_id, message=message))
             await db.commit()
     except Exception as exc:
-        print(f"[Notification] Failed to save notification for {user_id}: {exc}")
+        print(f"[Notification] Failed for {user_id}: {exc}")
+
+
+async def notify_role(roles: list[str], message: str) -> None:
+    """
+    Send *message* to every active user whose role is in *roles*.
+    Uses its own session — safe to call from any service.
+
+    Example:
+        await notify_role(["admin", "super_admin"], "New expense submitted")
+        await notify_role(["supervisor"], "Task ready for review")
+    """
+    from sqlalchemy import select
+    from app.db.session import AsyncSessionLocal
+    from app.models.user import User
+
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(User.id)
+                .where(User.role.in_(roles))
+                .where(User.is_active == True)  # noqa: E712
+            )
+            user_ids = result.scalars().all()
+            for uid in user_ids:
+                db.add(Notification(user_id=uid, message=message))
+            if user_ids:
+                await db.commit()
+    except Exception as exc:
+        print(f"[Notification] notify_role({roles}) failed: {exc}")
 
 
 # ── External email / SMS (unchanged) ─────────────────────────────────────────

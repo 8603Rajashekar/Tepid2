@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models.user import User
+from app.modules.notifications.service import notify_role
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserUpdate
 
@@ -56,7 +57,15 @@ class UserService:
             password_hash=hash_password(payload.password),
         )
 
-        return await UserRepository.create(db, user)
+        new_user = await UserRepository.create(db, user)
+
+        # Notify admins about the new account
+        creator = f" by {current_user.email}" if current_user else ""
+        await notify_role(
+            ["admin", "super_admin"],
+            f"👤 New {new_user.role.value} account created: {new_user.full_name} ({new_user.email}){creator}",
+        )
+        return new_user
 
     @staticmethod
     async def update_user(

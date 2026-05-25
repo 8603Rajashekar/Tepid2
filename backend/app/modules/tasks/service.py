@@ -9,7 +9,7 @@ from app.core.security import TokenUser
 from app.models.user import User
 from app.modules.audit_log.service import AuditLogService
 from app.modules.analytics.ws import manager as ws_manager
-from app.modules.notifications.service import NotificationService, create_notification
+from app.modules.notifications.service import NotificationService, create_notification, notify_role
 from app.modules.tasks.model import Task, TaskPriority, TaskStatus
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schema import (
@@ -284,7 +284,19 @@ class TaskService:
                 "delay_minutes": delay_minutes,
             },
         )
-        return await TaskRepository.update(db, task)
+        result = await TaskRepository.update(db, task)
+
+        # Notify creator + all admins: task is awaiting their review
+        if task.created_by and task.created_by != current_user_id:
+            await create_notification(
+                task.created_by,
+                f"⏳ Task submitted for your review: {task.title}",
+            )
+        await notify_role(
+            ["admin", "super_admin"],
+            f"⏳ Task pending review: '{task.title}' submitted by {current_user.email}",
+        )
+        return result
 
     # ------------------------------------------------------------------
     # APPROVE  (pending_review → approved)

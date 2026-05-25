@@ -18,7 +18,7 @@ from app.modules.expenses.model import (
 from app.modules.expenses.repository import ExpenseRepository
 from app.modules.expenses.schema import ExpenseCreate, ExpenseUpdate
 from app.modules.analytics.ws import manager as ws_manager
-from app.modules.notifications.service import NotificationService, create_notification
+from app.modules.notifications.service import NotificationService, create_notification, notify_role
 
 
 async def _fetch(db: AsyncSession, expense_id: UUID) -> Expense:
@@ -96,7 +96,18 @@ class ExpenseService:
             record_id=str(expense.id),
             after_data={"amount": str(expense.amount), "category": expense.category},
         )
-        return await ExpenseRepository.save(db, expense)
+        result = await ExpenseRepository.save(db, expense)
+
+        # Notify all supervisors + admins: new expense needs approval
+        await notify_role(
+            ["supervisor"],
+            f"💸 New expense awaiting your approval: '{expense.title}' ₹{expense.amount} by {current_user.email}",
+        )
+        await notify_role(
+            ["admin", "super_admin"],
+            f"💸 New expense submitted: '{expense.title}' ₹{expense.amount} by {current_user.email}",
+        )
+        return result
 
     @staticmethod
     async def update(
@@ -176,6 +187,11 @@ class ExpenseService:
             ),
         )
         await create_notification(expense.submitted_by, f"💸 Expense approved by supervisor: {expense.title}")
+        # Notify finance: new expense ready for their validation
+        await notify_role(
+            ["finance", "finance_officer"],
+            f"💸 Expense needs finance validation: '{expense.title}' ₹{expense.amount} (supervisor approved)",
+        )
         await AuditLogService.log(
             db,
             actor_id=actor_id,
@@ -222,6 +238,11 @@ class ExpenseService:
             body=f"Your expense '{expense.title}' (${expense.amount}) was validated by Finance. Awaiting admin final approval.",
         )
         await create_notification(expense.submitted_by, f"💸 Expense finance-validated: {expense.title} — awaiting admin approval")
+        # Notify admins: expense ready for final approval
+        await notify_role(
+            ["admin", "super_admin"],
+            f"✅ Expense ready for final approval: '{expense.title}' ₹{expense.amount} (finance validated)",
+        )
         await AuditLogService.log(
             db,
             actor_id=UUID(current_user.id),
