@@ -12,6 +12,7 @@ class CRMCallCreate(BaseModel):
     call_type:     CallType
     customer_name: str            = Field(..., min_length=2, max_length=200)
     phone:         str            = Field(..., min_length=7, max_length=20)
+    company_name:  Optional[str]  = Field(None, max_length=300)
     location:      Optional[str]  = Field(None, max_length=300)
     description:   Optional[str]  = Field(None, max_length=3000)
     priority:      CallPriority   = CallPriority.medium
@@ -45,6 +46,7 @@ class CRMCallUpdate(BaseModel):
     status:               Optional[CallStatus]   = None
     priority:             Optional[CallPriority] = None
     description:          Optional[str]          = Field(None, max_length=3000)
+    company_name:         Optional[str]          = Field(None, max_length=300)
     location:             Optional[str]          = Field(None, max_length=300)
     assigned_to:          Optional[UUID]         = None
     follow_up_date:       Optional[datetime]     = None
@@ -63,6 +65,7 @@ class CRMCallResponse(BaseModel):
     priority:      CallPriority
     customer_name: str
     phone:         str
+    company_name:  Optional[str]
     location:      Optional[str]
     description:   Optional[str]
 

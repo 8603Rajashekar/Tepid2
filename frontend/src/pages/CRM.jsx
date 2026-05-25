@@ -39,7 +39,8 @@ const TYPE_COLOR = {
 };
 
 const BLANK_FORM = {
-  call_type: "service", customer_name: "", phone: "", location: "",
+  call_type: "service", customer_name: "", phone: "",
+  company_name: "", location: "",
   description: "",
   equipment_name: "", urgency: "",
   quantity: "", amount: "", special_requirements: "",
@@ -472,7 +473,8 @@ export default function CRM() {
     if (activeTab !== "all" && c.call_type !== activeTab)        return false;
     if (statusFilter !== "all" && c.status !== statusFilter)     return false;
     if (search && !c.customer_name.toLowerCase().includes(search.toLowerCase())
-                && !(c.phone || "").includes(search)) return false;
+                && !(c.phone || "").includes(search)
+                && !(c.company_name || "").toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
@@ -659,18 +661,20 @@ export default function CRM() {
             ))}
           </div>
 
+          {/* Company details — first row */}
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Company Name" placeholder="e.g. Acme Pvt Ltd"
+              value={form.company_name} onChange={(e) => set("company_name", e.target.value)} />
+            <Input label="Location (optional)" placeholder="City / Area"
+              value={form.location} onChange={(e) => set("location", e.target.value)} />
+          </div>
+
           {/* Contact (mandatory) */}
           <div className="grid grid-cols-2 gap-3">
             <Input label="Customer Name" required placeholder="Full name"
               value={form.customer_name} onChange={(e) => set("customer_name", e.target.value)} />
             <Input label="Phone Number" required placeholder="+91 9876543210" type="tel"
               value={form.phone} onChange={(e) => set("phone", e.target.value)} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Location" placeholder="City / Area"
-              value={form.location} onChange={(e) => set("location", e.target.value)} />
-            <div />
           </div>
 
           {/* Dynamic fields by type */}
@@ -740,6 +744,7 @@ export default function CRM() {
                       <Badge cls={PRIORITY_BADGE[call.priority]}>{call.priority}</Badge>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
+                      {call.company_name && <span className="font-medium text-slate-500">🏢 {call.company_name} · </span>}
                       📞 {call.phone}
                       {call.location && <span> · 📍 {call.location}</span>}
                       <span className="ml-2">{new Date(call.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>

@@ -40,8 +40,9 @@ class CRMCall(Base):
     priority:      Mapped[CallPriority] = mapped_column(Enum(CallPriority), default=CallPriority.medium, nullable=False)
 
     # Contact (mandatory)
-    customer_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    phone:         Mapped[str] = mapped_column(String(20),  nullable=False)
+    customer_name: Mapped[str]       = mapped_column(String(200), nullable=False)
+    phone:         Mapped[str]       = mapped_column(String(20),  nullable=False)
+    company_name:  Mapped[str | None] = mapped_column(String(300), nullable=True)
     location:      Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     # Core fields (all types)
