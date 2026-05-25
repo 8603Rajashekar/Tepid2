@@ -5,6 +5,7 @@ __pycache__/
 *.pyd
 .Python
 .venv/
+.venv312/
 venv/
 env/
 *.egg-info/
@@ -12,8 +13,17 @@ dist/
 build/
 .pytest_cache/
 
+# Azure Functions local packages
+backend/.python_packages/
+backend/.venv/
+
+# Uploads — now stored in Azure Blob Storage
+uploads/
+backend/uploads/
+
 # Environment secrets — NEVER commit these
 backend/.env
+backend/local.settings.json
 .env
 .env.local
 .env.*.local
@@ -24,10 +34,16 @@ backend/.env
 # Node
 frontend/node_modules/
 frontend/build/
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Installers / binaries
+*.msi
+*.exe
 
 # OS
 .DS_Store
@@ -36,8 +52,3 @@ Thumbs.db
 # IDE
 .vscode/settings.json
 .idea/
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
