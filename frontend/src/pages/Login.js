@@ -51,15 +51,6 @@ export default function Login({ onLogin }) {
         {/* Logo */}
         <div className="flex items-center gap-3">
           <TePidIcon size={40} color="white" />
-          <span style={{
-            fontFamily: "Georgia, serif",
-            fontWeight: 700,
-            fontSize: 22,
-            color: "white",
-            letterSpacing: 1,
-          }}>
-            TePid
-          </span>
         </div>
 
         {/* Center content */}
@@ -97,16 +88,6 @@ export default function Login({ onLogin }) {
           {/* Mobile logo (hidden on large screens) */}
           <div className="flex flex-col items-center mb-10 lg:hidden">
             <TePidIcon size={64} color={NAVY} />
-            <span style={{
-              fontFamily: "Georgia, serif",
-              fontWeight: 700,
-              fontSize: 24,
-              color: NAVY,
-              letterSpacing: 1,
-              marginTop: 8,
-            }}>
-              TePid
-            </span>
           </div>
 
           {/* Heading */}
