@@ -417,41 +417,56 @@ export default function Expenses() {
                 {ex.receipt_url ? (
                   <div className="mb-2">
                     {isImage(ex.receipt_url) ? (
-                      /* ── Image: thumbnail + click to enlarge ── */
-                      <button type="button" onClick={() => setLightbox(receiptSrc(ex.receipt_url))}
-                        className="block group relative">
-                        <img
-                          src={receiptSrc(ex.receipt_url)}
-                          alt="expense proof"
-                          className="h-28 w-auto max-w-[220px] rounded-xl border border-slate-200 object-cover group-hover:opacity-90 transition shadow-sm"
-                          onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-                        />
-                        {/* fallback shown if image fails */}
-                        <div style={{ display: "none" }}
-                          className="h-28 w-[220px] rounded-xl border border-slate-200 bg-slate-50 items-center justify-center text-slate-400 text-sm">
-                          🖼 Image unavailable
-                        </div>
-                        <span className="absolute top-1 right-1 bg-black/50 text-white text-xs rounded-md px-1.5 py-0.5 opacity-0 group-hover:opacity-100 transition">
-                          🔍 Enlarge
-                        </span>
-                      </button>
-                    ) : isPdf(ex.receipt_url) ? (
-                      /* ── PDF: inline preview + open link ── */
-                      <div className="rounded-xl border border-slate-200 overflow-hidden">
-                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-100">
-                          <span className="text-xs font-semibold text-slate-600">📄 PDF Proof</span>
-                          <a href={receiptSrc(ex.receipt_url)} target="_blank" rel="noreferrer"
-                            className="text-xs text-blue-600 font-medium hover:underline">
-                            Open ↗
+                      /* ── Image: thumbnail + open full in new tab ── */
+                      <div className="flex items-start gap-3">
+                        <a
+                          href={receiptSrc(ex.receipt_url)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex-shrink-0 block group relative"
+                          title="Click to view full image"
+                        >
+                          <img
+                            src={receiptSrc(ex.receipt_url)}
+                            alt="expense proof"
+                            className="h-28 w-auto max-w-[200px] rounded-xl border border-slate-200 object-cover group-hover:opacity-80 transition shadow-sm"
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                              e.target.parentElement.querySelector(".img-fallback").style.display = "flex";
+                            }}
+                          />
+                          <div className="img-fallback hidden h-28 w-[200px] rounded-xl border border-slate-200 bg-slate-50 items-center justify-center text-slate-400 text-xs">
+                            🖼 Cannot preview
+                          </div>
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-xl transition">
+                            <span className="opacity-0 group-hover:opacity-100 bg-black/60 text-white text-xs px-2 py-1 rounded-lg transition">
+                              🔍 View
+                            </span>
+                          </span>
+                        </a>
+                        <div className="flex flex-col gap-2 pt-1">
+                          <a
+                            href={receiptSrc(ex.receipt_url)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition shadow-sm"
+                          >
+                            🔍 Open Full Image ↗
                           </a>
+                          <span className="text-xs text-slate-400">Click image or button to view</span>
                         </div>
-                        <iframe
-                          src={receiptSrc(ex.receipt_url)}
-                          title="PDF proof"
-                          className="w-full"
-                          style={{ height: 260, border: "none" }}
-                        />
                       </div>
+                    ) : isPdf(ex.receipt_url) ? (
+                      /* ── PDF: open in new tab ── */
+                      <a
+                        href={receiptSrc(ex.receipt_url)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-sm bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 px-4 py-2.5 rounded-xl transition font-medium shadow-sm"
+                      >
+                        <span className="text-lg">📄</span>
+                        <span>Open PDF Proof ↗</span>
+                      </a>
                     ) : (
                       /* ── Doc / Excel / other: download link ── */
                       <a
