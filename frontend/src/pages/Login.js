@@ -108,6 +108,24 @@ export default function Login({ onLogin }) {
           {/* Mobile logo (hidden on large screens) */}
           <div className="flex flex-col items-center mb-10 lg:hidden">
             <TePidIcon size={64} color={NAVY} />
+            <div style={{ marginTop: 10, textAlign: "center", lineHeight: 1.3 }}>
+              <div style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: NAVY,
+                letterSpacing: 0.4,
+              }}>
+                TePid
+              </div>
+              <div style={{
+                fontSize: 10.5,
+                fontWeight: 500,
+                color: "#64748b",
+                letterSpacing: 0.5,
+              }}>
+                Industries PVT LTD
+              </div>
+            </div>
           </div>
 
           {/* Heading */}
