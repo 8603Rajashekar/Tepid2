@@ -2,15 +2,12 @@ import { useRef, useState, useEffect } from "react";
 import api from "../../api/api";
 import { useToast } from "../../context/ToastContext";
 
-const SIG_TABS = [
-  { key: "typed", label: "Type Name", icon: "✍️" },
-  { key: "drawn", label: "Draw",      icon: "🖊️" },
-];
-
+// ── Draw-only signature canvas ─────────────────────────────────────────
 function DrawCanvas({ onCapture }) {
-  const canvasRef  = useRef(null);
-  const drawing    = useRef(false);
-  const lastPos    = useRef(null);
+  const canvasRef = useRef(null);
+  const drawing   = useRef(false);
+  const lastPos   = useRef(null);
+  const [hasDrawn, setHasDrawn] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -47,13 +44,17 @@ function DrawCanvas({ onCapture }) {
   };
 
   const stop = () => {
+    if (!drawing.current) return;
     drawing.current = false;
-    onCapture(canvasRef.current.toDataURL("image/png"));
+    const data = canvasRef.current.toDataURL("image/png");
+    setHasDrawn(true);
+    onCapture(data);
   };
 
   const clear = () => {
     const canvas = canvasRef.current;
     canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    setHasDrawn(false);
     onCapture("");
   };
 
@@ -62,8 +63,8 @@ function DrawCanvas({ onCapture }) {
       <canvas
         ref={canvasRef}
         width={460}
-        height={140}
-        className="w-full border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 cursor-crosshair touch-none"
+        height={150}
+        className="w-full border-2 border-dashed border-slate-300 rounded-xl bg-white cursor-crosshair touch-none"
         onMouseDown={start}
         onMouseMove={move}
         onMouseUp={stop}
@@ -72,48 +73,61 @@ function DrawCanvas({ onCapture }) {
         onTouchMove={move}
         onTouchEnd={stop}
       />
-      <button type="button" onClick={clear}
-        className="text-xs text-slate-400 hover:text-slate-600 underline">
-        Clear
-      </button>
+      <div className="flex items-center justify-between">
+        {hasDrawn
+          ? <span className="text-xs text-green-600 font-medium">✓ Signature drawn</span>
+          : <span className="text-xs text-slate-400">Draw your signature above using mouse or finger</span>
+        }
+        <button type="button" onClick={clear}
+          className="text-xs text-slate-400 hover:text-red-500 underline transition">
+          Clear
+        </button>
+      </div>
     </div>
   );
 }
 
 /**
  * ApprovalModal
- *
  * Props:
- *   module   — "task" | "expense" | "document" | "service_call"
- *   refId    — UUID string of the record being approved/rejected
- *   action   — "approved" | "rejected"
- *   label    — human-readable record label (shown in header)
- *   onSuccess  — called after successful submission
- *   onClose    — called when user dismisses
+ *   module    — "task" | "expense" | "document" | "service_call"
+ *   refId     — UUID string of the record
+ *   action    — "approved" | "rejected" | "escalated"
+ *   label     — human-readable record label
+ *   endpoint  — API endpoint (default: /approvals/)
+ *   onSuccess — called after successful submission
+ *   onClose   — called when user dismisses
  */
 export default function ApprovalModal({ module, refId, action, label, endpoint, onSuccess, onClose }) {
   const toast = useToast();
   const user  = JSON.parse(localStorage.getItem("user") || "{}");
 
-  const [sigTab,     setSigTab]     = useState("typed");
-  const [sigData,    setSigData]    = useState(user.full_name || user.email || "");
+  const [sigData,    setSigData]    = useState("");
   const [reason,     setReason]     = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const isReject   = action === "rejected";
   const isEscalate = action === "escalated";
-  const hasSignature = sigTab === "drawn" ? sigData.trim().length > 0 : sigData.trim().length > 0;
-  const canSubmit  = hasSignature && (!isReject || reason.trim().length > 0);
+
+  // Drawn signature is mandatory — must have actual image data
+  const hasSignature = sigData.startsWith("data:image");
+  const canSubmit    = hasSignature && (!isReject || reason.trim().length > 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      if (!hasSignature) {
+        toast.error("Please draw your signature before submitting");
+        return;
+      }
+      return;
+    }
 
     const payload = {
       module,
       ref_id:           refId,
       action,
-      signature_type:   sigTab,
+      signature_type:   "drawn",
       signature_data:   sigData,
       rejection_reason: isReject ? reason : undefined,
     };
@@ -121,11 +135,17 @@ export default function ApprovalModal({ module, refId, action, label, endpoint, 
     setSubmitting(true);
     try {
       await api.post(endpoint || "/approvals/", payload);
-      toast.success(isReject ? "Rejected and logged" : isEscalate ? "Escalated and signed" : "Approved and signed");
+      toast.success(
+        isReject   ? "Rejected and signed" :
+        isEscalate ? "Escalated and signed" :
+                     "Approved and signed"
+      );
       onSuccess();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Approval failed");
-    } finally { setSubmitting(false); }
+      toast.error(err.response?.data?.detail || "Action failed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -137,14 +157,13 @@ export default function ApprovalModal({ module, refId, action, label, endpoint, 
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-bold text-white text-lg">
-                {isReject ? "✕ Reject" : isEscalate ? "⬆ Escalate" : "✓ Approve"}{label ? ` — ${label}` : ""}
+                {isReject ? "✕ Reject" : isEscalate ? "⬆ Escalate" : "✓ Approve"}
+                {label ? ` — ${label}` : ""}
               </h2>
               <p className="text-xs text-white/80 mt-0.5">
                 {isReject
-                  ? "Provide a reason and your signature to reject"
-                  : isEscalate
-                  ? "Add your signature to confirm escalation"
-                  : "Add your signature to complete the approval"}
+                  ? "Provide a reason and draw your signature to reject"
+                  : "Draw your signature to confirm this action"}
               </p>
             </div>
             <button onClick={onClose} className="text-white/70 hover:text-white text-xl leading-none">✕</button>
@@ -152,6 +171,17 @@ export default function ApprovalModal({ module, refId, action, label, endpoint, 
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+          {/* Signer identity */}
+          <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+              {(user.full_name || user.email || "?").charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{user.full_name || user.email}</p>
+              <p className="text-xs text-slate-400 capitalize">{user.role?.replace("_", " ")}</p>
+            </div>
+          </div>
 
           {/* Rejection reason */}
           {isReject && (
@@ -162,7 +192,7 @@ export default function ApprovalModal({ module, refId, action, label, endpoint, 
               <textarea
                 required
                 rows={3}
-                placeholder="Explain why this is being rejected so the submitter can correct it…"
+                placeholder="Explain why this is being rejected…"
                 className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -170,65 +200,17 @@ export default function ApprovalModal({ module, refId, action, label, endpoint, 
             </div>
           )}
 
-          {/* Signature type tabs */}
+          {/* Digital Signature — Draw only */}
           <div>
             <p className="text-xs font-semibold text-slate-600 mb-2">
-              Signature <span className="text-red-500">*</span>
+              Digital Signature <span className="text-red-500">* Required</span>
             </p>
-            <div className="flex gap-1 mb-4 border border-slate-200 rounded-xl p-1 bg-slate-50">
-              {SIG_TABS.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => { setSigTab(t.key); setSigData(t.key === "typed" ? (user.full_name || user.email || "") : ""); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-lg transition ${
-                    sigTab === t.key
-                      ? "bg-white text-slate-800 shadow-sm"
-                      : "text-slate-400 hover:text-slate-600"
-                  }`}
-                >
-                  <span>{t.icon}</span>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Draw */}
-            {sigTab === "drawn" && (
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Draw your signature below:</p>
-                <DrawCanvas onCapture={setSigData} />
-                {sigData && (
-                  <p className="text-xs text-green-600 mt-1">✓ Signature captured</p>
-                )}
-              </div>
-            )}
-
-            {/* Type */}
-            {sigTab === "typed" && (
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Type your full name as your digital signature:</p>
-                <input
-                  type="text"
-                  placeholder="e.g. John Doe"
-                  className="w-full border border-slate-300 rounded-xl px-4 py-3 text-lg font-serif italic text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 tracking-wide"
-                  value={sigData}
-                  onChange={(e) => setSigData(e.target.value)}
-                />
-                {sigData && (
-                  <p className="text-xs text-slate-400 mt-1 text-right">
-                    Signing as: <span className="font-semibold text-slate-700">{sigData}</span>
-                  </p>
-                )}
-              </div>
-            )}
-
+            <DrawCanvas onCapture={setSigData} />
           </div>
 
           {/* Legal notice */}
-          <p className="text-xs text-slate-400 border-t border-slate-100 pt-4">
-            By submitting, you confirm this action is authorised. This approval is timestamped,
-            hashed, and permanently recorded. IP address and device are logged.
+          <p className="text-xs text-slate-400 border-t border-slate-100 pt-3">
+            By submitting, you confirm this action is authorised. Your signature, name and timestamp are permanently recorded.
           </p>
 
           {/* Actions */}
@@ -236,17 +218,15 @@ export default function ApprovalModal({ module, refId, action, label, endpoint, 
             <button
               type="submit"
               disabled={!canSubmit || submitting}
-              className={`flex-1 text-white text-sm py-2.5 rounded-xl font-semibold transition disabled:opacity-50 ${
-                isReject
-                  ? "bg-red-600 hover:bg-red-700"
-                  : isEscalate
-                  ? "bg-orange-500 hover:bg-orange-600"
-                  : "bg-green-600 hover:bg-green-700"
+              className={`flex-1 text-white text-sm py-2.5 rounded-xl font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                isReject   ? "bg-red-600 hover:bg-red-700" :
+                isEscalate ? "bg-orange-500 hover:bg-orange-600" :
+                             "bg-green-600 hover:bg-green-700"
               }`}
             >
               {submitting
                 ? (isReject ? "Rejecting…" : isEscalate ? "Escalating…" : "Approving…")
-                : (isReject ? "✕ Reject" : isEscalate ? "⬆ Escalate & Sign" : "✓ Approve & Sign")}
+                : (isReject ? "✕ Reject & Sign" : isEscalate ? "⬆ Escalate & Sign" : "✓ Approve & Sign")}
             </button>
             <button
               type="button"
@@ -256,6 +236,12 @@ export default function ApprovalModal({ module, refId, action, label, endpoint, 
               Cancel
             </button>
           </div>
+
+          {!hasSignature && (
+            <p className="text-center text-xs text-red-500 -mt-2">
+              ⚠ Draw your signature above to enable submission
+            </p>
+          )}
         </form>
       </div>
     </div>

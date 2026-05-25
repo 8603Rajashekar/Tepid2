@@ -2,45 +2,37 @@ import { useEffect, useState } from "react";
 import api from "../../api/api";
 
 const ACTION_STYLE = {
-  approved:  { cls: "bg-green-100 text-green-700 border-green-200", icon: "✓" },
-  rejected:  { cls: "bg-red-100   text-red-700   border-red-200",   icon: "✕" },
-  escalated: { cls: "bg-orange-100 text-orange-700 border-orange-200", icon: "⬆" },
+  approved:  { cls: "bg-green-50 border-green-200",   badge: "bg-green-100 text-green-700",   icon: "✓", label: "Approved"  },
+  rejected:  { cls: "bg-red-50   border-red-200",     badge: "bg-red-100   text-red-700",     icon: "✕", label: "Rejected"  },
+  escalated: { cls: "bg-orange-50 border-orange-200", badge: "bg-orange-100 text-orange-700", icon: "⬆", label: "Escalated" },
 };
 
-const SIG_ICON = { drawn: "🖊️", typed: "✍️" };
-
-// Numeric level for each role — higher = more privileged
-const ROLE_LEVEL = {
-  employee:            0,
-  coordinator:         1,
-  service_coordinator: 1,
-  supervisor:          2,
-  finance:             3,
-  finance_officer:     3,
-  admin:               4,
-  super_admin:         4,
+const ROLE_LABEL = {
+  admin: "Admin", super_admin: "Admin", supervisor: "Supervisor",
+  coordinator: "Coordinator", service_coordinator: "Coordinator",
+  finance: "Finance", finance_officer: "Finance",
+  employee: "Employee", crm: "CRM Agent",
 };
 
 function isDataUrl(s = "") {
-  return s.startsWith("data:image");
+  return typeof s === "string" && s.startsWith("data:image");
 }
 
-function canViewSignature(viewerRole, actorRole) {
-  const vl = ROLE_LEVEL[viewerRole] ?? 0;
-  const al = ROLE_LEVEL[actorRole]  ?? 0;
-  return vl >= al;
+function fmt(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    + " · "
+    + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
 /**
  * ApprovalHistory
- *
  * Props:
- *   refId   — UUID string of the record
- *   onClose — optional callback to hide the panel
+ *   refId   — UUID of the record
+ *   module  — optional module filter
+ *   onClose — optional dismiss callback
  */
 export default function ApprovalHistory({ refId, module, onClose }) {
-  const viewerRole = localStorage.getItem("role") || "";
-
   const [logs,    setLogs]    = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
@@ -69,7 +61,7 @@ export default function ApprovalHistory({ refId, module, onClose }) {
         {loading && (
           <div className="space-y-3 animate-pulse">
             {[...Array(2)].map((_, i) => (
-              <div key={i} className="h-16 bg-slate-100 rounded-lg" />
+              <div key={i} className="h-20 bg-slate-100 rounded-lg" />
             ))}
           </div>
         )}
@@ -84,95 +76,70 @@ export default function ApprovalHistory({ refId, module, onClose }) {
 
         {!loading && !error && logs.length > 0 && (
           <ol className="relative border-l-2 border-slate-200 space-y-5 ml-2">
-            {logs.map((log, i) => {
+            {logs.map((log) => {
               const style = ACTION_STYLE[log.action] || ACTION_STYLE.approved;
-              const ts    = new Date(log.timestamp);
               return (
                 <li key={log.id} className="ml-5">
                   {/* Timeline dot */}
-                  <span className={`absolute -left-[9px] w-4 h-4 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold ${
+                  <span className={`absolute -left-[9px] w-4 h-4 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white ${
                     log.action === "approved" ? "bg-green-500" :
-                    log.action === "rejected" ? "bg-red-500" : "bg-orange-500"
-                  } text-white`}>
+                    log.action === "rejected" ? "bg-red-500"   : "bg-orange-500"
+                  }`}>
                     {style.icon}
                   </span>
 
-                  <div className={`border rounded-xl p-3 ${style.cls}`}>
-                    {/* Top row */}
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${style.cls}`}>
-                          {log.action}
-                        </span>
-                        <span className="text-xs opacity-70" title={log.module}>
-                          {log.module.replace("_", " ")}
-                        </span>
-                      </div>
-                      <span className="text-xs opacity-60 flex-shrink-0">
-                        {ts.toLocaleDateString()} {ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  <div className={`border rounded-xl p-4 space-y-3 ${style.cls}`}>
+
+                    {/* Action badge + date/time */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full ${style.badge}`}>
+                        {style.label}
+                      </span>
+                      <span className="text-xs text-slate-500 font-medium flex-shrink-0">
+                        🕐 {fmt(log.timestamp)}
                       </span>
                     </div>
 
-                    {/* Actor */}
-                    <p className="text-xs font-semibold opacity-80 mb-1.5">
-                      {log.actor_name || "Unknown actor"}
-                      {log.actor_email ? <span className="font-normal opacity-70"> ({log.actor_email})</span> : null}
-                      {log.actor_role && (
-                        <span className="ml-1.5 capitalize font-normal opacity-60 bg-white/40 px-1.5 py-0.5 rounded text-[10px]">
-                          {log.actor_role.replace("_", " ")}
-                        </span>
-                      )}
-                    </p>
+                    {/* Who approved — name + role */}
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                        {(log.actor_name || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {log.actor_name || "Unknown"}
+                        </p>
+                        <p className="text-xs text-slate-400 capitalize">
+                          {ROLE_LABEL[log.actor_role] || log.actor_role?.replace("_", " ") || ""}
+                        </p>
+                      </div>
+                    </div>
 
-                    {/* Signature preview — masked if viewer role is below the signer's role */}
-                    {canViewSignature(viewerRole, log.actor_role) ? (
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm">{SIG_ICON[log.signature_type] || "✍️"}</span>
-                        {log.signature_type === "drawn" && isDataUrl(log.signature_data) ? (
-                          <img
-                            src={log.signature_data}
-                            alt="drawn signature"
-                            className="h-8 bg-white rounded border border-current/20"
-                          />
-                        ) : (
-                          <span className="text-xs font-serif italic opacity-90 truncate max-w-[200px]">
-                            {!log.signature_data ? "—" : log.signature_data.startsWith("data:") ? "[drawn signature]" : log.signature_data}
-                          </span>
-                        )}
-                        <span className="text-xs opacity-50 capitalize">{log.signature_type}</span>
+                    {/* Digital signature */}
+                    {isDataUrl(log.signature_data) ? (
+                      <div className="bg-white rounded-lg border border-slate-200 p-2">
+                        <p className="text-xs text-slate-400 mb-1.5 font-medium">Digital Signature</p>
+                        <img
+                          src={log.signature_data}
+                          alt="signature"
+                          className="h-12 max-w-full object-contain"
+                        />
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm">🔒</span>
-                        <span className="text-xs opacity-60 italic">
-                          Signature restricted — {log.actor_role?.replace("_", " ")} level
-                        </span>
+                    ) : log.signature_data && !log.signature_data.startsWith("data:") ? (
+                      <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
+                        <p className="text-xs text-slate-400 mb-0.5">Signed as</p>
+                        <p className="text-sm font-serif italic text-slate-800">{log.signature_data}</p>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* Rejection reason */}
                     {log.rejection_reason && (
-                      <p className="text-xs opacity-80 bg-white/40 rounded-lg px-2 py-1 mb-1.5">
-                        <span className="font-semibold">Reason:</span> {log.rejection_reason}
-                      </p>
+                      <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                        <p className="text-xs font-semibold text-red-700 mb-0.5">Reason</p>
+                        <p className="text-xs text-red-600">{log.rejection_reason}</p>
+                      </div>
                     )}
 
-                    {/* Meta */}
-                    <div className="flex gap-3 text-xs opacity-50 flex-wrap">
-                      <span title={log.actor_id}>Actor ID: {log.actor_id.slice(0, 8)}…</span>
-                      {log.ip_address && <span>IP: {log.ip_address}</span>}
-                      {log.user_agent && (
-                        <span title={log.user_agent} className="truncate max-w-[180px]">
-                          {log.user_agent.split(" ")[0]}
-                        </span>
-                      )}
-                      <span
-                        className="font-mono truncate max-w-[120px] cursor-help"
-                        title={`SHA-256: ${log.hash}`}
-                      >
-                        #{log.hash.slice(0, 8)}…
-                      </span>
-                    </div>
                   </div>
                 </li>
               );
