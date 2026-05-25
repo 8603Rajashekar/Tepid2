@@ -1,10 +1,18 @@
+import { useState } from "react";
 import Sidebar from "./Sidebar";
 import NotificationBell from "../components/NotificationBell";
 
 export default function Layout({ role, onLogout, children }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <div className="flex bg-gray-100 min-h-screen">
-      <Sidebar role={role} onLogout={onLogout} />
+      <Sidebar
+        role={role}
+        onLogout={onLogout}
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen((o) => !o)}
+      />
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar */}
