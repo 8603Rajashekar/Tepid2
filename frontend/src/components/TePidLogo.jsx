@@ -1,19 +1,25 @@
-const LOGO_DARK = "/tepid-logo-white.png";   // white version — for dark/coloured backgrounds
-const LOGO_LIGHT = "/tepid-logo.png";         // coloured version — for white/light backgrounds
+const LOGO = "/tepid-logo.png"; // single source — CSS filter makes it white when needed
 
 /**
  * TePidIcon
- * Pass color="white" (or any truthy dark-bg hint) to get the white variant.
- * Default: coloured variant for light backgrounds.
+ * Pass color="white" on dark/coloured backgrounds — applies brightness+invert filter
+ * so the coloured logo renders as pure white.
+ * Default: coloured variant for light backgrounds (no filter).
  */
 export function TePidIcon({ size = 48, color }) {
-  const src = color === "white" ? LOGO_DARK : LOGO_LIGHT;
+  const style = {
+    objectFit: "contain",
+    display: "block",
+    ...(color === "white"
+      ? { filter: "brightness(0) invert(1)" }   // force pure white
+      : {}),
+  };
   return (
     <img
-      src={src}
+      src={LOGO}
       width={size}
       height={size}
-      style={{ objectFit: "contain", display: "block" }}
+      style={style}
       alt="TePid"
     />
   );
