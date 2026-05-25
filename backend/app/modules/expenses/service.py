@@ -18,7 +18,7 @@ from app.modules.expenses.model import (
 from app.modules.expenses.repository import ExpenseRepository
 from app.modules.expenses.schema import ExpenseCreate, ExpenseUpdate
 from app.modules.analytics.ws import manager as ws_manager
-from app.modules.notifications.service import NotificationService
+from app.modules.notifications.service import NotificationService, create_notification
 
 
 async def _fetch(db: AsyncSession, expense_id: UUID) -> Expense:
@@ -175,6 +175,7 @@ class ExpenseService:
                 + (" Forwarded to Finance for final approval." if expense.amount > FINANCE_APPROVAL_THRESHOLD else "")
             ),
         )
+        await create_notification(db, expense.submitted_by, f"💸 Expense approved by supervisor: {expense.title}")
         await AuditLogService.log(
             db,
             actor_id=actor_id,
@@ -220,6 +221,7 @@ class ExpenseService:
             subject="Expense Finance Validated",
             body=f"Your expense '{expense.title}' (${expense.amount}) was validated by Finance. Awaiting admin final approval.",
         )
+        await create_notification(db, expense.submitted_by, f"💸 Expense finance-validated: {expense.title} — awaiting admin approval")
         await AuditLogService.log(
             db,
             actor_id=UUID(current_user.id),
@@ -266,6 +268,7 @@ class ExpenseService:
             subject="Expense Final Approval",
             body=f"Your expense '{expense.title}' (${expense.amount}) received final admin approval and will be reimbursed.",
         )
+        await create_notification(db, expense.submitted_by, f"✅ Expense finally approved: {expense.title} — will be reimbursed")
         await AuditLogService.log(
             db,
             actor_id=UUID(current_user.id),
@@ -311,6 +314,7 @@ class ExpenseService:
             subject="Expense Rejected",
             body=f"Your expense '{expense.title}' was rejected. Reason: {data.rejection_reason}",
         )
+        await create_notification(db, expense.submitted_by, f"❌ Expense rejected: {expense.title}")
         await AuditLogService.log(
             db,
             actor_id=actor_id,
@@ -349,6 +353,7 @@ class ExpenseService:
             subject="Expense Reimbursed",
             body=f"Your expense '{expense.title}' (${expense.amount}) has been reimbursed.",
         )
+        await create_notification(db, expense.submitted_by, f"💰 Expense reimbursed: {expense.title} (₹{expense.amount})")
         await AuditLogService.log(
             db,
             actor_id=actor_id,

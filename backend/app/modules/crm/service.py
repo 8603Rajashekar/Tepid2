@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import TokenUser
 from app.modules.crm.model import CRMCall, CallStatus
 from app.modules.crm.schema import CRMCallCreate, CRMCallUpdate
+from app.modules.notifications.service import create_notification
 
 
 class CRMService:
@@ -20,6 +21,12 @@ class CRMService:
             updated_at=datetime.now(UTC),
         )
         db.add(call)
+
+        # Notify the assigned user (if any) about the new CRM call
+        assigned = getattr(data, "assigned_to", None)
+        if assigned:
+            await create_notification(db, assigned, f"📞 New CRM call assigned: {data.client_name}")
+
         await db.commit()
         await db.refresh(call)
         return call

@@ -1,5 +1,27 @@
 import os
+from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.notifications.model import Notification
+
+
+# ── In-app DB notifications ───────────────────────────────────────────────────
+
+async def create_notification(db: AsyncSession, user_id: UUID, message: str) -> None:
+    """
+    Add a notification row for *user_id* to the current session.
+    The caller's next db.commit() will persist it — no extra commit needed here.
+    Silently ignores errors so a notification failure never breaks core business logic.
+    """
+    try:
+        notif = Notification(user_id=user_id, message=message)
+        db.add(notif)
+    except Exception as exc:
+        print(f"[Notification] Failed to queue notification: {exc}")
+
+
+# ── External email / SMS (unchanged) ─────────────────────────────────────────
 
 class NotificationService:
     @staticmethod
@@ -22,14 +44,13 @@ class NotificationService:
             except Exception as exc:
                 print(f"[NotificationService] SendGrid error: {exc}")
 
-        # Fallback - set SENDGRID_API_KEY in .env to enable real emails.
         print(f"\n[EMAIL] To: {to}")
         print(f"   Subject : {subject}")
         print(f"   Body    : {body}\n")
 
     @staticmethod
     async def send_sms(phone: str, message: str) -> None:
-        sid = os.getenv("TWILIO_SID")
+        sid   = os.getenv("TWILIO_SID")
         token = os.getenv("TWILIO_TOKEN")
         from_number = os.getenv("TWILIO_FROM")
         if sid and token and from_number:
@@ -42,6 +63,5 @@ class NotificationService:
             except Exception as exc:
                 print(f"[NotificationService] Twilio error: {exc}")
 
-        # Fallback - set TWILIO_SID / TWILIO_TOKEN / TWILIO_FROM in .env to enable real SMS.
         print(f"\n[SMS] To: {phone}")
         print(f"   Message : {message}\n")

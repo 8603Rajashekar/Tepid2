@@ -1,8 +1,5 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
@@ -13,6 +10,7 @@ from app.modules.approvals.router import router as approvals_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.documents.router import router as documents_router
 from app.modules.expenses.router import router as expenses_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.service_calls.router import router as service_calls_router
 from app.modules.work_reports.router import router as work_reports_router
 from app.modules.auth.router import router as auth_router
@@ -55,10 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(documents_router, prefix=settings.API_V1_PREFIX)
     app.include_router(work_reports_router, prefix=settings.API_V1_PREFIX)
     app.include_router(crm_router, prefix=settings.API_V1_PREFIX)
-
-    uploads_dir = Path(__file__).resolve().parents[2] / "uploads"
-    uploads_dir.mkdir(exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+    app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 
     return app
 
