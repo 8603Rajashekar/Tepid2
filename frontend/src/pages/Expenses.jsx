@@ -162,6 +162,7 @@ export default function Expenses() {
   const [attachFile,    setAttachFile]    = useState(null);
   const [approvalModal, setApprovalModal] = useState(null);   // { expId, action, label, endpoint }
   const [lightbox,      setLightbox]      = useState(null);   // image url to show fullscreen
+  const [submitting,    setSubmitting]    = useState(false);  // guard against double-submit
   const [form,          setForm]          = useState({
     title: "", category: "other", amount: "", currency: "USD", description: "",
   });
@@ -207,10 +208,12 @@ export default function Expenses() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    if (submitting) return;           // hard guard — ignore second call
     if (receiptRequired && !receiptFile) {
       toast.error("A supporting document is required for expenses above ₹999");
       return;
     }
+    setSubmitting(true);
     try {
       // Step 1 — create the expense record
       const res = await api.post("/expenses/", { ...form, amount: parseFloat(form.amount) });
@@ -231,6 +234,8 @@ export default function Expenses() {
       load();
     } catch (err) {
       toast.error(err.response?.data?.detail || "Failed to create expense");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -323,9 +328,27 @@ export default function Expenses() {
           <UploadZone file={receiptFile} onChange={setReceiptFile} required={receiptRequired} />
 
           <div className="flex gap-2">
-            <button type="submit" className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition">Create</button>
-            <button type="button" onClick={() => { setShowCreate(false); setReceiptFile(null); }}
-              className="text-sm text-slate-500 px-4 py-2 rounded-lg border border-slate-300 hover:border-slate-400 transition">Cancel</button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {submitting && (
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+              {submitting ? "Creating…" : "Create"}
+            </button>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => { setShowCreate(false); setReceiptFile(null); }}
+              className="text-sm text-slate-500 px-4 py-2 rounded-lg border border-slate-300 hover:border-slate-400 transition disabled:opacity-50"
+            >
+              Cancel
+            </button>
           </div>
         </form>
       )}
