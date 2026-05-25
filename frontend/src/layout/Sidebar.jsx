@@ -107,8 +107,28 @@ export default function Sidebar({ role, onLogout }) {
     <aside className="w-58 bg-slate-900 text-white flex flex-col flex-shrink-0 h-screen sticky top-0 shadow-xl">
       {/* Brand */}
       <div className="px-5 py-4 border-b border-slate-700/60">
-        <div className="flex items-center">
+        <div className="flex items-center gap-3">
           <TePidIcon size={36} color="white" />
+          <div style={{ lineHeight: 1.25 }}>
+            <div style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: "#ffffff",
+              letterSpacing: 0.4,
+              whiteSpace: "nowrap",
+            }}>
+              TePid
+            </div>
+            <div style={{
+              fontSize: 9.5,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.60)",
+              letterSpacing: 0.5,
+              whiteSpace: "nowrap",
+            }}>
+              Industries PVT LTD
+            </div>
+          </div>
         </div>
       </div>
 
