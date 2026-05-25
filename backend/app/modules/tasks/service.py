@@ -167,7 +167,7 @@ class TaskService:
                 subject="New Task Assigned",
                 body=f"You have been assigned task: {task.title}",
             )
-            await create_notification(db, task.assigned_to, f"📋 New task assigned: {task.title}")
+            await create_notification(task.assigned_to, f"📋 New task assigned: {task.title}")
 
         return task
 
@@ -212,7 +212,7 @@ class TaskService:
                 + (f" Due: {task.due_date.date()}" if task.due_date else "")
             ),
         )
-        await create_notification(db, data.assigned_to, f"📋 Task assigned to you: {task.title}")
+        await create_notification(data.assigned_to, f"📋 Task assigned to you: {task.title}")
 
         return await TaskRepository.update(db, task)
 
@@ -320,7 +320,7 @@ class TaskService:
             subject="Task Approved",
             body=f"Your task '{task.title}' has been approved.",
         )
-        await create_notification(db, task.assigned_to, f"✅ Task approved: {task.title}")
+        await create_notification(task.assigned_to, f"✅ Task approved: {task.title}")
 
         await AuditLogService.log(
             db, actor_id=approver_id, module="tasks",
@@ -377,7 +377,7 @@ class TaskService:
             subject="Task Rejected — Please Rework",
             body=f"Your task '{task.title}' was rejected. Reason: {data.rejection_reason}\n\nPlease rework and resubmit.",
         )
-        await create_notification(db, task.assigned_to, f"❌ Task rejected — please rework: {task.title}")
+        await create_notification(task.assigned_to, f"❌ Task rejected — please rework: {task.title}")
 
         await AuditLogService.log(
             db, actor_id=rejector_id, module="tasks",

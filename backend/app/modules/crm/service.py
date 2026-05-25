@@ -25,7 +25,7 @@ class CRMService:
         # Notify the assigned user (if any) about the new CRM call
         assigned = getattr(data, "assigned_to", None)
         if assigned:
-            await create_notification(db, assigned, f"📞 New CRM call assigned: {data.client_name}")
+            await create_notification(assigned, f"📞 New CRM call assigned: {data.client_name}")
 
         await db.commit()
         await db.refresh(call)

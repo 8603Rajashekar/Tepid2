@@ -1,24 +1,24 @@
 import os
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.modules.notifications.model import Notification
 
 
 # ── In-app DB notifications ───────────────────────────────────────────────────
 
-async def create_notification(db: AsyncSession, user_id: UUID, message: str) -> None:
+async def create_notification(user_id: UUID, message: str) -> None:
     """
-    Add a notification row for *user_id* to the current session.
-    The caller's next db.commit() will persist it — no extra commit needed here.
-    Silently ignores errors so a notification failure never breaks core business logic.
+    Persist a notification using its OWN session so it always commits,
+    regardless of what the caller's session has already committed or not.
+    Never raises — a notification failure must never break business logic.
     """
+    from app.db.session import AsyncSessionLocal   # local import avoids circular dep
     try:
-        notif = Notification(user_id=user_id, message=message)
-        db.add(notif)
+        async with AsyncSessionLocal() as db:
+            db.add(Notification(user_id=user_id, message=message))
+            await db.commit()
     except Exception as exc:
-        print(f"[Notification] Failed to queue notification: {exc}")
+        print(f"[Notification] Failed to save notification for {user_id}: {exc}")
 
 
 # ── External email / SMS (unchanged) ─────────────────────────────────────────
