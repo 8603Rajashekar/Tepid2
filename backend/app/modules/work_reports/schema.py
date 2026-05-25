@@ -20,8 +20,6 @@ class WorkReportCreate(BaseModel):
         today = _date.today()
         if v > today:
             raise ValueError("Report date cannot be in the future")
-        if (today - v).days > 2:
-            raise ValueError("Cannot submit reports more than 2 days in the past")
         return v
 
     @field_validator("hours_logged")

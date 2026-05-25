@@ -48,7 +48,13 @@ export default function WorkReportsPage() {
       setForm({ report_date: today(), hours_logged: "", summary: "", blockers: "", tomorrow_plan: "" });
       fetchReports(tab);
     } catch (e) {
-      setError(e.response?.data?.detail || "Submission failed");
+      const detail = e.response?.data?.detail;
+      if (Array.isArray(detail)) {
+        // FastAPI validation error array → extract first message
+        setError(detail.map((d) => d.msg?.replace("Value error, ", "")).join(", ") || "Submission failed");
+      } else {
+        setError(typeof detail === "string" ? detail : "Submission failed");
+      }
     }
   };
 
@@ -62,7 +68,7 @@ export default function WorkReportsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Work Reports</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Daily submission · max 12 hours · max 2-day backdating</p>
+          <p className="text-xs text-slate-400 mt-0.5">Daily submission · max 12 hours per day</p>
         </div>
         <button
           onClick={() => { setShowForm(!showForm); setError(null); setSuccess(null); }}

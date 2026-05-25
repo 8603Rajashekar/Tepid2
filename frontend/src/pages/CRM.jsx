@@ -202,7 +202,11 @@ function WorkReportsSection() {
       setReportForm({ ...BLANK_REPORT });
       loadReports();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Submission failed");
+      const detail = err.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map((d) => d.msg?.replace("Value error, ", "")).join(", ") || "Submission failed"
+        : typeof detail === "string" ? detail : "Submission failed";
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
