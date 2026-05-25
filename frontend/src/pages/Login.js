@@ -51,6 +51,26 @@ export default function Login({ onLogin }) {
         {/* Logo */}
         <div className="flex items-center gap-3">
           <TePidIcon size={40} color="white" />
+          <div style={{ lineHeight: 1.25 }}>
+            <div style={{
+              fontSize: 15,
+              fontWeight: 700,
+              color: "#ffffff",
+              letterSpacing: 0.4,
+              whiteSpace: "nowrap",
+            }}>
+              TePid
+            </div>
+            <div style={{
+              fontSize: 10,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.60)",
+              letterSpacing: 0.5,
+              whiteSpace: "nowrap",
+            }}>
+              Industries PVT LTD
+            </div>
+          </div>
         </div>
 
         {/* Center content */}
