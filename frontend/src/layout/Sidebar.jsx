@@ -33,6 +33,7 @@ const NAV = {
     { to: "/service-calls", label: "Service Calls",  icon: "📞" },
     { to: "/expenses",      label: "My Expenses",    icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
+    { to: "/work-reports",  label: "Work Reports",   icon: "📝" },
   ],
   finance: [
     { to: "/tasks",         label: "My Tasks",       icon: "📋" },
@@ -62,6 +63,7 @@ const NAV = {
     { to: "/service-calls", label: "Service Calls",  icon: "📞" },
     { to: "/expenses",      label: "My Expenses",    icon: "💸" },
     { to: "/documents",     label: "Documents",      icon: "📄" },
+    { to: "/work-reports",  label: "Work Reports",   icon: "📝" },
   ],
   finance_officer: [
     { to: "/tasks",         label: "My Tasks",       icon: "📋" },

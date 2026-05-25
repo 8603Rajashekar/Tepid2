@@ -63,13 +63,13 @@ PERMISSIONS: dict[str, dict[str, str]] = {
     "work_reports": {
         "admin":               "full",
         "supervisor":          "team",
-        "coordinator":         "read",
+        "coordinator":         "team",   # can view employee reports
         "finance":             "own",
         "employee":            "own",
         "crm":                 "own",
         # legacy
         "super_admin":         "full",
-        "service_coordinator": "read",
+        "service_coordinator": "team",   # same as coordinator
         "finance_officer":     "own",
     },
     "crm": {

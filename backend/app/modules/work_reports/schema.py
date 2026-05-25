@@ -41,6 +41,9 @@ class WorkReportResponse(BaseModel):
     tasks:         Optional[list]
     attachments:   Optional[list]
     created_at:    datetime
+    # Joined from users table — present in team view
+    user_name:     Optional[str] = None
+    user_role:     Optional[str] = None
 
     class Config:
         from_attributes = True
