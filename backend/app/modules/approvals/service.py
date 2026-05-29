@@ -39,8 +39,9 @@ async def _apply_to_module(
         task = await db.get(Task, ref_id)
         if not task:
             raise HTTPException(404, "Task not found")
-        if role not in (*_ADMIN_ROLES, "supervisor"):
-            raise HTTPException(403, "Only a supervisor or admin can approve/reject tasks")
+        # Supervisors can approve/reject any pending task (not just ones they created).
+        if role not in (*_ADMIN_ROLES, "supervisor", "coordinator", "service_coordinator"):
+            raise HTTPException(403, "Only a supervisor, coordinator, or admin can approve/reject tasks")
         if task.status != TaskStatus.pending_review:
             raise HTTPException(400, f"Task is not pending review (status: {task.status})")
 
@@ -59,44 +60,62 @@ async def _apply_to_module(
         if not expense:
             raise HTTPException(404, "Expense not found")
 
+        # ── Expense approval flow: Employee → Finance → Admin ──────────────
+        # Supervisors are NOT in the expense approval chain.
+        # Legacy supervisor_approved records can still be processed by finance.
         if action == ApprovalAction.approved:
-            # Allow supervisors to approve submitted expenses (may auto-forward to finance
-            # when amount <= threshold). Allow finance roles to validate/approve even
-            # when the expense is still in 'submitted' (i.e. skip supervisor step).
             if expense.status == ExpenseStatus.submitted:
-                if role in ("supervisor", "admin", "super_admin"):
-                    expense.status = ExpenseStatus.supervisor_approved
-                    expense.supervisor_id = actor_id
-                    expense.supervisor_approved_at = now
-                    if expense.amount <= FINANCE_APPROVAL_THRESHOLD:
-                        expense.status = ExpenseStatus.finance_approved
-                        expense.finance_approved_at = now
-                elif role in ("finance_officer", "finance", "admin", "super_admin"):
+                # Only Finance or Admin can approve a freshly submitted expense
+                if role in ("finance_officer", "finance", "admin", "super_admin"):
                     expense.status = ExpenseStatus.finance_approved
                     expense.finance_id = actor_id
                     expense.finance_approved_at = now
                 else:
-                    raise HTTPException(403, f"Role '{role}' cannot approve submitted expenses")
-            elif expense.status == ExpenseStatus.supervisor_approved and role in ("finance_officer", "finance", "admin", "super_admin"):
-                expense.status = ExpenseStatus.finance_approved
-                expense.finance_id = actor_id
-                expense.finance_approved_at = now
-            elif expense.status == ExpenseStatus.finance_approved and role in ("admin", "super_admin"):
-                expense.status = ExpenseStatus.admin_approved
-                expense.updated_at = now
+                    raise HTTPException(
+                        403,
+                        f"Role '{role}' cannot approve expenses. "
+                        "Expenses must be validated by Finance before any other approval.",
+                    )
+            elif expense.status == ExpenseStatus.supervisor_approved:
+                # Legacy: a supervisor may have approved before this change was deployed.
+                # Finance (or admin) can still move it forward.
+                if role in ("finance_officer", "finance", "admin", "super_admin"):
+                    expense.status = ExpenseStatus.finance_approved
+                    expense.finance_id = actor_id
+                    expense.finance_approved_at = now
+                else:
+                    raise HTTPException(
+                        403,
+                        "Only Finance or Admin can advance a supervisor-approved expense.",
+                    )
+            elif expense.status == ExpenseStatus.finance_approved:
+                if role in ("admin", "super_admin"):
+                    expense.status = ExpenseStatus.admin_approved
+                    expense.updated_at = now
+                else:
+                    raise HTTPException(
+                        403,
+                        "Only Admin can give final approval after Finance has validated.",
+                    )
             else:
                 raise HTTPException(
                     400,
-                    f"Cannot approve expense in status '{expense.status}' with role '{role}'",
+                    f"Cannot approve expense in status '{expense.status}' (role: '{role}').",
                 )
         elif action == ApprovalAction.rejected:
-            if expense.status == ExpenseStatus.submitted and role not in (*_ADMIN_ROLES, "supervisor", "finance_officer", "finance"):
-                raise HTTPException(403, "Only a supervisor, finance, or admin can reject submitted expenses")
+            # Finance and Admin can reject at their respective stages.
+            # Supervisors can no longer reject expenses.
+            if expense.status == ExpenseStatus.submitted and role not in (*_ADMIN_ROLES, "finance_officer", "finance"):
+                raise HTTPException(403, "Only Finance or Admin can reject a submitted expense")
             if expense.status == ExpenseStatus.supervisor_approved and role not in (*_ADMIN_ROLES, "finance_officer", "finance"):
-                raise HTTPException(403, "Only finance or admin can reject finance-stage expenses")
+                raise HTTPException(403, "Only Finance or Admin can reject a supervisor-approved expense")
             if expense.status == ExpenseStatus.finance_approved and role not in _ADMIN_ROLES:
-                raise HTTPException(403, "Only admin can reject at the final approval stage")
-            if expense.status not in (ExpenseStatus.submitted, ExpenseStatus.supervisor_approved, ExpenseStatus.finance_approved):
+                raise HTTPException(403, "Only Admin can reject at the final approval stage")
+            if expense.status not in (
+                ExpenseStatus.submitted,
+                ExpenseStatus.supervisor_approved,
+                ExpenseStatus.finance_approved,
+            ):
                 raise HTTPException(400, f"Cannot reject expense in status '{expense.status}'")
             expense.status           = ExpenseStatus.rejected
             expense.rejected_by      = actor_id

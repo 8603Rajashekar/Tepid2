@@ -1,11 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.modules.crm.model import CallPriority, CallStatus, CallType
+
+_CLOSED_STATUSES = {CallStatus.resolved, CallStatus.closed}
 
 
 class CRMCallCreate(BaseModel):
@@ -32,6 +34,7 @@ class CRMCallCreate(BaseModel):
 
     follow_up_date: Optional[datetime] = None
     assigned_to:    Optional[UUID]     = None
+    direction:      Optional[str]      = "outbound"   # "inbound" | "outbound"
 
     @field_validator("phone")
     @classmethod
@@ -56,6 +59,11 @@ class CRMCallUpdate(BaseModel):
     quantity:             Optional[int]          = None
     amount:               Optional[Decimal]      = Field(None, ge=0)
     special_requirements: Optional[str]          = Field(None, max_length=2000)
+    # Call log fields
+    direction:             Optional[str]         = None
+    call_duration_seconds: Optional[int]         = None
+    call_outcome:          Optional[str]         = None
+    call_notes:            Optional[str]         = Field(None, max_length=3000)
 
 
 class CRMCallResponse(BaseModel):
@@ -82,10 +90,26 @@ class CRMCallResponse(BaseModel):
     resolved_at:    Optional[datetime]
     closed_at:      Optional[datetime]
 
+    direction:             Optional[str]
+    call_duration_seconds: Optional[int]
+    call_outcome:          Optional[str]
+    call_notes:            Optional[str]
+
     created_by:  UUID
     assigned_to: Optional[UUID]
     created_at:  datetime
     updated_at:  datetime
+
+    # Computed — not stored in DB
+    follow_up_overdue: bool = False
+
+    @model_validator(mode="after")
+    def compute_follow_up_overdue(self) -> "CRMCallResponse":
+        if self.follow_up_date and self.status not in _CLOSED_STATUSES:
+            now = datetime.now(timezone.utc)
+            fud = self.follow_up_date if self.follow_up_date.tzinfo else self.follow_up_date.replace(tzinfo=timezone.utc)
+            self.follow_up_overdue = fud < now
+        return self
 
     class Config:
         from_attributes = True

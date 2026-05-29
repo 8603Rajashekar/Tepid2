@@ -12,7 +12,7 @@ from app.core.security import hash_password
 from app.models.role import Role, UserRole
 from app.models.user import User
 
-engine = create_async_engine(settings.DATABASE_URL)
+engine = create_async_engine(settings.database_url)
 SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 ADMIN_EMAIL = "admin@company.com"

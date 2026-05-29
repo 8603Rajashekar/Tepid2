@@ -349,14 +349,15 @@ export default function Users() {
             <p className="text-xs text-slate-400 mt-1">Try adjusting your search or filter</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="text-left px-6 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-widest w-1/3">Member</th>
+                <th className="text-left px-4 sm:px-6 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-widest">Member</th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-widest">Role</th>
-                <th className="text-left px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-widest">Phone</th>
+                <th className="hidden md:table-cell text-left px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-widest">Phone</th>
                 <th className="text-left px-4 py-3.5 text-xs font-semibold text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="px-4 py-3.5 w-24" />
+                <th className="px-4 py-3.5 w-20" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -365,7 +366,7 @@ export default function Users() {
                 return (
                   <tr key={u.id} className="hover:bg-slate-50/70 transition group">
                     {/* Member */}
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 border ${r.cls}`}>
                           {u.full_name.charAt(0).toUpperCase()}
@@ -380,8 +381,8 @@ export default function Users() {
                     <td className="px-4 py-4">
                       <RoleBadge role={u.role} />
                     </td>
-                    {/* Phone */}
-                    <td className="px-4 py-4 text-slate-500 text-xs">
+                    {/* Phone — hidden on mobile */}
+                    <td className="hidden md:table-cell px-4 py-4 text-slate-500 text-xs">
                       {u.phone || <span className="text-slate-300">—</span>}
                     </td>
                     {/* Status */}
@@ -414,6 +415,7 @@ export default function Users() {
               })}
             </tbody>
           </table>
+          </div>
         )}
 
         {/* Table footer */}

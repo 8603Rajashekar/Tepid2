@@ -8,12 +8,14 @@ from alembic import context
 
 load_dotenv()
 
+from app.core.config import settings
+
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-_db_url = os.getenv("SYNC_DATABASE_URL", "")
+_db_url = os.getenv("SYNC_DATABASE_URL", "") or settings.sync_database_url
 config.set_main_option("sqlalchemy.url", _db_url.replace("%", "%%"))
 
 from app.db.base import Base
@@ -24,6 +26,11 @@ from app.modules.tasks.model import Task  # noqa: F401
 from app.modules.tracking.model import TaskLocation  # noqa: F401
 from app.modules.service_calls.model import ServiceCall  # noqa: F401
 from app.modules.expenses.model import Expense  # noqa: F401
+from app.modules.documents.model import Document  # noqa: F401
+from app.modules.work_reports.model import WorkReport  # noqa: F401
+from app.modules.approvals.model import ApprovalLog  # noqa: F401
+from app.modules.notifications.model import Notification  # noqa: F401
+from app.modules.crm.model import CRMCall  # noqa: F401
 
 target_metadata = Base.metadata
 

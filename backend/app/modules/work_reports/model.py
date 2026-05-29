@@ -1,9 +1,9 @@
+import sqlalchemy as sa
 import enum
 import uuid
 from datetime import datetime
 
 from sqlalchemy import Date, DateTime, Enum, Float, ForeignKey, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -28,10 +28,10 @@ class WorkReport(Base):
         UniqueConstraint("user_id", "report_date", name="uq_work_report_user_date"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(), primary_key=True, default=uuid.uuid4)
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False,
+        sa.Uuid(), ForeignKey("users.id"), nullable=False,
     )
 
     report_date:  Mapped[datetime] = mapped_column(Date, nullable=False)
@@ -43,7 +43,7 @@ class WorkReport(Base):
 
     mood: Mapped[MoodLevel | None] = mapped_column(Enum(MoodLevel), nullable=True)
 
-    tasks:       Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    attachments: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    tasks:       Mapped[list | None] = mapped_column(sa.JSON, nullable=True)
+    attachments: Mapped[list | None] = mapped_column(sa.JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

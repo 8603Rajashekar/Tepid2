@@ -49,7 +49,7 @@ class WorkReportService:
             summary=data.summary,
             blockers=data.blockers,
             tomorrow_plan=data.tomorrow_plan,
-            mood=data.mood,
+            mood=getattr(data, "mood", None),
             tasks=data.tasks or [],
             attachments=data.attachments or [],
         )

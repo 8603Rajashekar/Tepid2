@@ -1,33 +1,204 @@
 {
-	"version": "2.0.0",
-	"tasks": [
-		{
-			"type": "func",
-			"label": "func: host start",
-			"command": "host start",
-			"problemMatcher": "$func-python-watch",
-			"isBackground": true,
-			"dependsOn": "pip install (functions)",
-			"options": {
-				"cwd": "${workspaceFolder}/backend"
-			}
-		},
-		{
-			"label": "pip install (functions)",
-			"type": "shell",
-			"osx": {
-				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
-			},
-			"windows": {
-				"command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
-			},
-			"linux": {
-				"command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
-			},
-			"problemMatcher": [],
-			"options": {
-				"cwd": "${workspaceFolder}/backend"
-			}
-		}
-	]
+  "version": "2.0.0",
+  "tasks": [
+
+    // ─── BACKEND (uvicorn local dev) ─────────────────────────────────────────
+    {
+      "label": "Backend: uvicorn (local)",
+      "type": "shell",
+      "command": ".venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --port 8000",
+      "options": {
+        "cwd": "${workspaceFolder}/backend",
+        "env": {
+          "PYTHONIOENCODING": "utf-8"
+        }
+      },
+      "presentation": {
+        "group": "fieldops",
+        "panel": "dedicated",
+        "reveal": "always",
+        "showReuseMessage": false,
+        "label": "🐍 Backend"
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "runOptions": { "runOn": "default" }
+    },
+
+    // ─── BACKEND (Azure Functions host — runs from azure-functions/) ─────────
+    {
+      "type": "func",
+      "label": "Backend: func host start",
+      "command": "host start",
+      "problemMatcher": "$func-python-watch",
+      "isBackground": true,
+      "dependsOn": "Backend: pip install",
+      "options": {
+        "cwd": "${workspaceFolder}/azure-functions"
+      },
+      "presentation": {
+        "group": "fieldops",
+        "panel": "dedicated",
+        "reveal": "always",
+        "label": "⚡ Azure Functions"
+      }
+    },
+
+    {
+      "label": "Backend: pip install",
+      "type": "shell",
+      "windows": {
+        "command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
+      },
+      "osx": {
+        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+      },
+      "linux": {
+        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+      },
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      }
+    },
+
+    // ─── FRONTEND (React) ────────────────────────────────────────────────────
+    {
+      "label": "Frontend: npm start",
+      "type": "shell",
+      "command": "npm start",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "presentation": {
+        "group": "fieldops",
+        "panel": "dedicated",
+        "reveal": "always",
+        "showReuseMessage": false,
+        "label": "⚛️  Frontend"
+      },
+      "problemMatcher": [],
+      "isBackground": true
+    },
+
+    {
+      "label": "Frontend: npm build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "presentation": {
+        "group": "fieldops",
+        "panel": "shared",
+        "reveal": "always",
+        "label": "📦 Frontend Build"
+      },
+      "problemMatcher": []
+    },
+
+    // ─── MOBILE (Expo) ───────────────────────────────────────────────────────
+    {
+      "label": "Mobile: expo start",
+      "type": "shell",
+      "command": "npx expo start",
+      "options": {
+        "cwd": "${workspaceFolder}/mobile"
+      },
+      "presentation": {
+        "group": "fieldops",
+        "panel": "dedicated",
+        "reveal": "always",
+        "showReuseMessage": false,
+        "label": "📱 Mobile"
+      },
+      "problemMatcher": [],
+      "isBackground": true
+    },
+
+    {
+      "label": "Mobile: expo start --tunnel",
+      "type": "shell",
+      "command": "npx expo start --tunnel",
+      "options": {
+        "cwd": "${workspaceFolder}/mobile"
+      },
+      "presentation": {
+        "group": "fieldops",
+        "panel": "dedicated",
+        "reveal": "always",
+        "label": "📱 Mobile (Tunnel)"
+      },
+      "problemMatcher": [],
+      "isBackground": true
+    },
+
+    // ─── COMPOUND: Start all 3 apps at once ──────────────────────────────────
+    {
+      "label": "🚀 Start All (Backend + Frontend + Mobile)",
+      "dependsOn": [
+        "Backend: uvicorn (local)",
+        "Frontend: npm start",
+        "Mobile: expo start"
+      ],
+      "dependsOrder": "parallel",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // ─── COMPOUND: Frontend + Mobile (use Azure backend) ─────────────────────
+    {
+      "label": "🌐 Start Frontend + Mobile (Azure backend)",
+      "dependsOn": [
+        "Frontend: npm start",
+        "Mobile: expo start"
+      ],
+      "dependsOrder": "parallel",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+
+    // ─── DEPLOY: Push backend to Azure (runs from azure-functions/) ─────────
+    {
+      "label": "Deploy: Backend to Azure",
+      "type": "shell",
+      "command": "func azure functionapp publish FieldOps --python",
+      "options": {
+        "cwd": "${workspaceFolder}/azure-functions",
+        "env": {
+          "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+        }
+      },
+      "presentation": {
+        "group": "deploy",
+        "panel": "dedicated",
+        "reveal": "always",
+        "label": "🚀 Deploy Backend"
+      },
+      "problemMatcher": []
+    },
+
+    // ─── DEPLOY: Push frontend to Azure Static Website ───────────────────────
+    {
+      "label": "Deploy: Frontend to Azure Static Website",
+      "type": "shell",
+      "command": "npm run build && az storage blob upload-batch -s build -d '$web' --account-name tepidfrontend --overwrite",
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "presentation": {
+        "group": "deploy",
+        "panel": "dedicated",
+        "reveal": "always",
+        "label": "🌐 Deploy Frontend"
+      },
+      "problemMatcher": []
+    }
+  ]
 }

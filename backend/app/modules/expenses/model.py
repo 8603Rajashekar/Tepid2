@@ -1,10 +1,10 @@
+import sqlalchemy as sa
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -36,7 +36,7 @@ class Expense(Base):
     __tablename__ = "expenses"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4,
+        sa.Uuid(), primary_key=True, default=uuid.uuid4,
     )
 
     title: Mapped[str]      = mapped_column(String(200), nullable=False)
@@ -51,25 +51,25 @@ class Expense(Base):
 
     # Who submitted
     submitted_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False,
+        sa.Uuid(), ForeignKey("users.id"), nullable=False,
     )
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Supervisor level
     supervisor_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True,
+        sa.Uuid(), ForeignKey("users.id"), nullable=True,
     )
     supervisor_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Finance level (required when amount > FINANCE_APPROVAL_THRESHOLD)
     finance_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True,
+        sa.Uuid(), ForeignKey("users.id"), nullable=True,
     )
     finance_approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Rejection
     rejected_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=True,
+        sa.Uuid(), ForeignKey("users.id"), nullable=True,
     )
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 

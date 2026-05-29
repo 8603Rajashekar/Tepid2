@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  PieChart, Pie, Cell, Legend,
 } from "recharts";
 import api from "../api/api";
+import GreetingBanner from "../components/GreetingBanner";
+
+const TASK_COLORS = ["#3b82f6", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444"];
 
 const STATUS_BADGE = {
   draft:               { label: "Draft",             cls: "bg-slate-100 text-slate-600" },
@@ -97,9 +101,16 @@ function Skeleton() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-slate-100 rounded-xl border border-slate-200" />)}
       </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-24 bg-slate-100 rounded-xl border border-slate-200" />)}
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 h-64 bg-slate-100 rounded-xl border border-slate-200" />
         <div className="h-64 bg-slate-100 rounded-xl border border-slate-200" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="h-52 bg-slate-100 rounded-xl border border-slate-200" />
+        <div className="h-52 bg-slate-100 rounded-xl border border-slate-200" />
       </div>
     </div>
   );
@@ -107,12 +118,20 @@ function Skeleton() {
 
 export default function EmployeeDashboard() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const [data,  setData]  = useState(null);
-  const [error, setError] = useState(null);
+  const [data,     setData]     = useState(null);
+  const [taskData, setTaskData] = useState(null);
+  const [error,    setError]    = useState(null);
 
   useEffect(() => {
-    api.get("/dashboard/employee")
-      .then((r) => setData(r.data))
+    // Load expense summary + task summary in parallel
+    Promise.all([
+      api.get("/dashboard/employee"),
+      api.get("/dashboard/overview"),
+    ])
+      .then(([expRes, taskRes]) => {
+        setData(expRes.data);
+        setTaskData(taskRes.data);
+      })
       .catch(() => setError("Failed to load dashboard"));
   }, []);
 
@@ -126,11 +145,14 @@ export default function EmployeeDashboard() {
   return (
     <div className="space-y-6">
 
+      {/* ── GREETING ── */}
+      <GreetingBanner />
+
       {/* ── HEADER ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Welcome back, {firstName} 👋</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Here's your activity summary</p>
+          <h1 className="text-2xl font-bold text-slate-800">Your Activity Summary</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Everything at a glance</p>
         </div>
         {/* Quick actions */}
         <div className="flex gap-2 flex-wrap">
@@ -149,13 +171,47 @@ export default function EmployeeDashboard() {
         </div>
       </div>
 
-      {/* ── STAT CARDS ── */}
+      {/* ── EXPENSE STAT CARDS ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard title="Total Expenses"  value={data.total_expenses}    icon="💸" color="slate"  sub="submitted" />
+        <StatCard title="Total Expenses"  value={data.total_expenses}    icon="💸" color="slate"  sub="all submitted" />
         <StatCard title="Pending"         value={data.pending_expenses}  icon="⏳" color="yellow" sub="awaiting approval" />
         <StatCard title="Approved"        value={data.approved_expenses} icon="✅" color="green"  sub="approved + reimbursed" />
         <StatCard title="Rejected"        value={data.rejected_expenses} icon="❌" color="red"    sub="needs resubmission" />
       </div>
+
+      {/* ── TASK STAT CARDS ── */}
+      {taskData && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatCard
+            title="My Tasks"
+            value={taskData.total_tasks ?? 0}
+            icon="📋"
+            color="blue"
+            sub="total assigned"
+          />
+          <StatCard
+            title="In Progress"
+            value={taskData.in_progress_tasks ?? 0}
+            icon="⚡"
+            color="purple"
+            sub="currently active"
+          />
+          <StatCard
+            title="Completed"
+            value={taskData.completed_tasks ?? 0}
+            icon="✅"
+            color="green"
+            sub="approved tasks"
+          />
+          <StatCard
+            title="Pending Review"
+            value={taskData.pending_tasks ?? 0}
+            icon="⏳"
+            color="yellow"
+            sub="submitted for review"
+          />
+        </div>
+      )}
 
       {/* ── MAIN ROW: Expenses + Activity ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -253,28 +309,80 @@ export default function EmployeeDashboard() {
         </div>
       </div>
 
-      {/* ── MONTHLY CHART ── */}
-      {data.monthly_expenses.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h2 className="font-semibold text-slate-800 mb-4">My Approved Expenses — Last 6 Months</h2>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={data.monthly_expenses}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${v.toLocaleString()}`} />
-              <Tooltip formatter={(v) => [`₹${v.toLocaleString()}`, "Approved"]} />
-              <Line
-                type="monotone"
-                dataKey="total"
-                stroke="#3b82f6"
-                strokeWidth={2}
-                dot={{ fill: "#3b82f6", r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {/* ── CHARTS ROW: Monthly expenses + Task breakdown ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+        {/* Monthly expense line chart */}
+        {data.monthly_expenses.length > 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h2 className="font-semibold text-slate-800 mb-4">Approved Expenses — Last 6 Months</h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={data.monthly_expenses}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `₹${v.toLocaleString()}`} />
+                <Tooltip formatter={(v) => [`₹${v.toLocaleString()}`, "Approved"]} />
+                <Line
+                  type="monotone"
+                  dataKey="total"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={{ fill: "#3b82f6", r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center h-48">
+            <p className="text-2xl mb-2">📊</p>
+            <p className="text-sm text-slate-400">No approved expenses yet</p>
+          </div>
+        )}
+
+        {/* Task status pie chart */}
+        {taskData && taskData.total_tasks > 0 ? (() => {
+          const taskPie = [
+            { name: "In Progress",    value: taskData.in_progress_tasks ?? 0 },
+            { name: "Pending Review", value: taskData.pending_tasks      ?? 0 },
+            { name: "Completed",      value: taskData.completed_tasks    ?? 0 },
+            { name: "New",            value: taskData.new_tasks          ?? 0 },
+            { name: "Rejected",       value: taskData.rejected_tasks     ?? 0 },
+          ].filter((d) => d.value > 0);
+          return (
+            <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <h2 className="font-semibold text-slate-800 mb-4">My Task Distribution</h2>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={taskPie}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={75}
+                    label={({ name, value }) => `${name}: ${value}`}
+                    labelLine={false}
+                  >
+                    {taskPie.map((_, i) => (
+                      <Cell key={i} fill={TASK_COLORS[i % TASK_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend iconSize={10} iconType="circle" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })() : (
+          <div className="bg-slate-50 rounded-xl border border-slate-200 flex flex-col items-center justify-center h-48">
+            <p className="text-2xl mb-2">📋</p>
+            <p className="text-sm text-slate-400">No tasks assigned yet</p>
+            <p className="text-xs text-slate-300 mt-1">Tasks appear here once assigned by your supervisor</p>
+          </div>
+        )}
+
+      </div>
 
       {/* ── QUICK LINKS ROW ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

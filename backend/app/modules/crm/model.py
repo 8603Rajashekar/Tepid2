@@ -1,9 +1,9 @@
+import sqlalchemy as sa
 import enum
 import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -33,7 +33,7 @@ class CallPriority(str, enum.Enum):
 class CRMCall(Base):
     __tablename__ = "crm_calls"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(), primary_key=True, default=uuid.uuid4)
 
     call_type:     Mapped[CallType]     = mapped_column(Enum(CallType),     nullable=False)
     status:        Mapped[CallStatus]   = mapped_column(Enum(CallStatus),   default=CallStatus.open,   nullable=False)
@@ -69,9 +69,15 @@ class CRMCall(Base):
     # Follow-up
     follow_up_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Phone call tracking
+    direction:             Mapped[str | None] = mapped_column(String(10),  nullable=True, default="outbound")
+    call_duration_seconds: Mapped[int | None] = mapped_column(Integer,     nullable=True)
+    call_outcome:          Mapped[str | None] = mapped_column(String(50),  nullable=True)
+    call_notes:            Mapped[str | None] = mapped_column(Text,        nullable=True)
+
     # Relations
-    created_by:  Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    assigned_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_by:  Mapped[uuid.UUID]       = mapped_column(sa.Uuid(), ForeignKey("users.id"), nullable=False)
+    assigned_to: Mapped[uuid.UUID | None] = mapped_column(sa.Uuid(), ForeignKey("users.id"), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

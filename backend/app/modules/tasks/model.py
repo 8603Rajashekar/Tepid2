@@ -1,8 +1,8 @@
+import sqlalchemy as sa
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Float, Integer, String, Text, DateTime, Enum, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Float, Integer, JSON, String, Text, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -40,7 +40,7 @@ class Task(Base):
 
     # 🔑 Primary Key
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        sa.Uuid(),
         primary_key=True,
         default=uuid.uuid4,
     )
@@ -51,13 +51,13 @@ class Task(Base):
 
     # 👤 Ownership
     created_by: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        sa.Uuid(),
         ForeignKey("users.id"),
         nullable=False,
     )
 
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        sa.Uuid(),
         ForeignKey("users.id"),
         nullable=True,
     )
@@ -105,7 +105,7 @@ class Task(Base):
     time_spent_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
+        sa.Uuid(),
         ForeignKey("users.id"),
         nullable=True,
     )
@@ -116,6 +116,12 @@ class Task(Base):
     )
 
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # 👥 Multi-employee assignment — list of additional assignee UUIDs (strings)
+    co_assignees: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+    # 📝 Remarks submitted by employee when completing work
+    submission_remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # 📊 Efficiency Scoring
     delay_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)

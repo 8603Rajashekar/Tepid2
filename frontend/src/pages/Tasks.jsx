@@ -115,7 +115,7 @@ function MetricCard({ label, value, tone = "slate" }) {
 }
 
 // ── Assignee Team Board ───────────────────────────────────────────────────
-function TeamBoard({ tasks, myId, isAdmin, onApprove, onReject }) {
+function TeamBoard({ tasks, myId, isAdmin, onApprove, onReject, onSubmit }) {
   const [expanded, setExpanded] = useState({});
 
   // Group tasks by assignee
@@ -199,6 +199,7 @@ function TeamBoard({ tasks, myId, isAdmin, onApprove, onReject }) {
                         isAdmin={isAdmin}
                         onApprove={onApprove}
                         onReject={onReject}
+                        onSubmit={onSubmit}
                         compact
                       />
                     ))}
@@ -217,7 +218,7 @@ function TeamBoard({ tasks, myId, isAdmin, onApprove, onReject }) {
           <div className="space-y-2">
             {unassigned.map((t) => (
               <TaskRow key={t.id} task={t} myId={myId} isAdmin={isAdmin}
-                onApprove={onApprove} onReject={onReject} compact />
+                onApprove={onApprove} onReject={onReject} onSubmit={onSubmit} compact />
             ))}
           </div>
         </div>
@@ -251,13 +252,15 @@ function LiveTimer({ startedAt }) {
 }
 
 // ── Single task row (used in both list and team board) ────────────────────
-function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssign, assignees }) {
+function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, onSubmit, compact, onAssign, assignees }) {
   const [showAssign, setShowAssign] = useState(false);
   const [assignTo,   setAssignTo]   = useState("");
 
   const canApproveThis = isAdmin || t.created_by === myId;
-  // Backend already filters assignees by role — use the list directly
   const allowedUsers = assignees || [];
+  // Employee can act if they are primary assignee OR in co_assignees
+  const coAssigneeIds = (t.co_assignees || []);
+  const isAssigned = t.assigned_to === myId || coAssigneeIds.includes(myId);
 
   const handleAssign = () => {
     if (!assignTo) return;
@@ -319,6 +322,25 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
         )}
       </div>
 
+      {/* Co-assignees */}
+      {t.co_assignee_names?.length > 0 && (
+        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+          <span className="text-xs text-slate-400">Also assigned:</span>
+          {t.co_assignee_names.map((name, i) => (
+            <span key={i} className="text-xs bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-full font-medium">
+              👤 {name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Submission remarks */}
+      {t.submission_remarks && (
+        <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 text-xs text-blue-800 mb-2">
+          <span className="font-semibold">Remarks:</span> {t.submission_remarks}
+        </div>
+      )}
+
       {/* Rejection reason */}
       {t.rejection_reason && (
         <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-1.5 text-xs text-red-700 mb-2">
@@ -352,11 +374,11 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
         )}
 
         {/* Employee actions */}
-        {t.status === "assigned" && t.assigned_to === myId && (
+        {t.status === "assigned" && isAssigned && (
           <Btn color="indigo" onClick={() => onApprove(t.id, "start")}>Start</Btn>
         )}
-        {t.status === "in_progress" && t.assigned_to === myId && (
-          <Btn color="yellow" onClick={() => onApprove(t.id, "submit")}>Submit Assigned Work</Btn>
+        {t.status === "in_progress" && isAssigned && (
+          <Btn color="yellow" onClick={() => onSubmit(t.id)}>Submit Work</Btn>
         )}
 
         {/* Approve/Reject — only creator or admin */}
@@ -373,26 +395,32 @@ function TaskRow({ task: t, myId, isAdmin, onApprove, onReject, compact, onAssig
 function CreateTaskForm({ assignees, canAssign, onSave, onCancel }) {
   const toast = useToast();
   const [form, setForm] = useState({
-    title: "", description: "", due_date: "", assigned_to: "", task_type: "other",
+    title: "", description: "", due_date: "", task_type: "other",
   });
-  // Backend already filters assignees by role — use the list directly
+  const [selectedIds, setSelectedIds] = useState([]);
   const allowedUsers = assignees;
-  const canSubmit = canAssign && allowedUsers.length > 0 && Boolean(form.assigned_to);
+  const canSubmit = canAssign && allowedUsers.length > 0 && selectedIds.length > 0;
+
+  const toggleUser = (id) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!canSubmit) {
-      toast.error("Select a valid assignee before creating the task");
+      toast.error("Select at least one assignee");
       return;
     }
     try {
       const payload = {
-        title:       form.title,
-        description: form.description || undefined,
-        priority:    "normal",
-        task_type:   form.task_type,
-        due_date:    form.due_date || undefined,
-        assigned_to: form.assigned_to,
+        title:            form.title,
+        description:      form.description || undefined,
+        priority:         "normal",
+        task_type:        form.task_type,
+        due_date:         form.due_date || undefined,
+        assigned_to:      selectedIds[0],
+        assigned_to_ids:  selectedIds,
       };
       await api.post("/tasks/", payload);
       toast.success("Task created");
@@ -419,15 +447,10 @@ function CreateTaskForm({ assignees, canAssign, onSave, onCancel }) {
 
       <div>
         <label className="block text-xs font-semibold text-slate-600 mb-1">Task Type</label>
-        <select
-          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-          value={form.task_type}
-          onChange={(e) => f("task_type", e.target.value)}
-        >
+        <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+          value={form.task_type} onChange={(e) => f("task_type", e.target.value)}>
           {Object.entries(TASK_TYPE_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
+            <option key={value} value={value}>{label}</option>
           ))}
         </select>
       </div>
@@ -439,19 +462,34 @@ function CreateTaskForm({ assignees, canAssign, onSave, onCancel }) {
           value={form.due_date} onChange={(e) => f("due_date", e.target.value)} />
       </div>
 
-      {/* Assign to */}
+      {/* Multi-select assignees */}
       {canAssign && allowedUsers.length > 0 && (
         <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1">Assign To</label>
-          <select required className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
-            value={form.assigned_to} onChange={(e) => f("assigned_to", e.target.value)}>
-            <option value="">Select assignee</option>
-            {allowedUsers.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.full_name} · {ROLE_LABEL[u.role] || u.role}
-              </option>
-            ))}
-          </select>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">
+            Assign To <span className="text-slate-400 font-normal">(select one or more)</span>
+          </label>
+          <div className="border border-slate-300 rounded-lg max-h-44 overflow-y-auto divide-y divide-slate-100">
+            {allowedUsers.map((u) => {
+              const checked = selectedIds.includes(u.id);
+              return (
+                <label key={u.id}
+                  className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition ${checked ? "bg-blue-50" : ""}`}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleUser(u.id)}
+                    className="w-4 h-4 rounded accent-blue-600" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700">{u.full_name}</p>
+                    <p className="text-xs text-slate-400">{ROLE_LABEL[u.role] || u.role}</p>
+                  </div>
+                  {checked && selectedIds[0] === u.id && (
+                    <span className="text-xs text-blue-600 font-semibold">Primary</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+          {selectedIds.length > 0 && (
+            <p className="text-xs text-blue-600 mt-1">{selectedIds.length} employee{selectedIds.length > 1 ? "s" : ""} selected</p>
+          )}
         </div>
       )}
 
@@ -487,14 +525,16 @@ export default function Tasks() {
   const canAssign  = isAdmin || ["supervisor", "coordinator", "service_coordinator"].includes(role);
   const canCreate  = canAssign;
 
-  const [tasks,       setTasks]       = useState([]);
-  const [assignees,   setAssignees]   = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [tab,         setTab]         = useState("all");
-  const [filter,      setFilter]      = useState("all");
-  const [showCreate,  setShowCreate]  = useState(false);
-  const [rejectId,    setRejectId]    = useState(null);
-  const [rejectReason,setRejectReason]= useState("");
+  const [tasks,         setTasks]         = useState([]);
+  const [assignees,     setAssignees]     = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [tab,           setTab]           = useState("all");
+  const [filter,        setFilter]        = useState("all");
+  const [showCreate,    setShowCreate]    = useState(false);
+  const [rejectId,      setRejectId]      = useState(null);
+  const [rejectReason,  setRejectReason]  = useState("");
+  const [submitTaskId,  setSubmitTaskId]  = useState(null);
+  const [submitRemarks, setSubmitRemarks] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -530,6 +570,13 @@ export default function Tasks() {
 
   const handleAssign = (taskId, userId) => {
     act(`/tasks/${taskId}/assign`, { assigned_to: userId });
+  };
+
+  const handleSubmitWork = async () => {
+    if (!submitRemarks.trim()) return;
+    await act(`/tasks/${submitTaskId}/submit`, { remarks: submitRemarks });
+    setSubmitTaskId(null);
+    setSubmitRemarks("");
   };
 
   const handleReject = async () => {
@@ -605,6 +652,33 @@ export default function Tasks() {
       )}
 
       {/* ── REJECT MODAL ── */}
+      {/* Submit work remarks modal */}
+      {submitTaskId && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <h2 className="font-semibold text-slate-800 mb-1">Submit Work — Add Remarks</h2>
+            <p className="text-xs text-slate-400 mb-3">
+              Describe what you completed. Your remarks will be visible to the reviewer.
+            </p>
+            <textarea rows={4} placeholder="What did you complete? Any notes for the reviewer…"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              value={submitRemarks} onChange={(e) => setSubmitRemarks(e.target.value)} />
+            <p className="text-xs text-slate-400 mt-1">{submitRemarks.trim().length}/2000 · min 3 characters</p>
+            <div className="flex gap-2 mt-3">
+              <button onClick={handleSubmitWork} disabled={submitRemarks.trim().length < 3}
+                className="bg-yellow-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-yellow-600 transition font-medium disabled:opacity-50">
+                Submit Work
+              </button>
+              <button onClick={() => { setSubmitTaskId(null); setSubmitRemarks(""); }}
+                className="text-sm text-slate-500 px-4 py-2 rounded-lg border border-slate-300 hover:border-slate-400 transition">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject modal */}
       {rejectId && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
@@ -651,6 +725,7 @@ export default function Tasks() {
           isAdmin={isAdmin}
           onApprove={handleAction}
           onReject={setRejectId}
+          onSubmit={setSubmitTaskId}
         />
       )}
 
@@ -693,6 +768,7 @@ export default function Tasks() {
                   isAdmin={isAdmin}
                   onApprove={handleAction}
                   onReject={setRejectId}
+                  onSubmit={setSubmitTaskId}
                   onAssign={canAssign ? handleAssign : null}
                   assignees={assignees}
                 />

@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -19,6 +20,8 @@ from app.modules.expenses.repository import ExpenseRepository
 from app.modules.expenses.schema import ExpenseCreate, ExpenseUpdate
 from app.modules.analytics.ws import manager as ws_manager
 from app.modules.notifications.service import NotificationService, create_notification, notify_role
+
+PROOF_REQUIRED_ABOVE = Decimal("999")
 
 
 async def _fetch(db: AsyncSession, expense_id: UUID) -> Expense:
@@ -47,6 +50,12 @@ class ExpenseService:
     @staticmethod
     async def create(db: AsyncSession, data: ExpenseCreate, current_user: TokenUser) -> Expense:
         check_permission(current_user, "expenses", "own")
+
+        if data.amount > PROOF_REQUIRED_ABOVE and not data.receipt_url:
+            raise HTTPException(
+                status_code=400,
+                detail="A supporting proof document is required for expenses above Rs. 999.",
+            )
 
         expense = Expense(
             **data.model_dump(),
@@ -78,10 +87,10 @@ class ExpenseService:
         if expense.status != ExpenseStatus.draft:
             raise HTTPException(status_code=400, detail="Only draft expenses can be submitted")
 
-        if float(expense.amount) > 999 and not expense.receipt_url:
+        if expense.amount > PROOF_REQUIRED_ABOVE and not expense.receipt_url:
             raise HTTPException(
                 status_code=400,
-                detail="A supporting document is required for expenses above ₹999. Please attach a receipt before submitting.",
+                detail="A supporting proof document is required for expenses above Rs. 999. Please attach proof before submitting.",
             )
 
         expense.status = ExpenseStatus.submitted
@@ -98,14 +107,11 @@ class ExpenseService:
         )
         result = await ExpenseRepository.save(db, expense)
 
-        # Notify all supervisors + admins: new expense needs approval
+        # Notify finance only — they are the first approver in the Finance→Admin flow.
+        # Admin gets notified once finance validates (not on every raw submission).
         await notify_role(
-            ["supervisor"],
-            f"💸 New expense awaiting your approval: '{expense.title}' ₹{expense.amount} by {current_user.email}",
-        )
-        await notify_role(
-            ["admin", "super_admin"],
-            f"💸 New expense submitted: '{expense.title}' ₹{expense.amount} by {current_user.email}",
+            ["finance", "finance_officer"],
+            f"💸 New expense submitted for your approval: '{expense.title}' ₹{expense.amount} by {current_user.email}",
         )
         return result
 
@@ -388,7 +394,10 @@ class ExpenseService:
     @staticmethod
     async def get_all(db: AsyncSession, current_user: TokenUser) -> list[Expense]:
         check_permission(current_user, "expenses", "read")
-        if has_permission(current_user, "expenses", "own") and not has_permission(current_user, "expenses", "view"):
+        # Roles with team(2) or full(3) access see all; own(1) roles see only their own.
+        # (The old check `own AND NOT view` was always False because own >= view in the
+        # hierarchy, so supervisors incorrectly saw every expense.)
+        if not has_permission(current_user, "expenses", "team"):
             return await ExpenseRepository.get_by_user(db, UUID(current_user.id))
         return await ExpenseRepository.get_all(db)
 
@@ -412,7 +421,8 @@ class ExpenseService:
     async def get_one(db: AsyncSession, expense_id: UUID, current_user: TokenUser) -> Expense:
         check_permission(current_user, "expenses", "read")
         expense = await _fetch(db, expense_id)
-        if has_permission(current_user, "expenses", "own") and not has_permission(current_user, "expenses", "view"):
+        # Same boundary as get_all: team(2)+ can view any expense; own(1) only own.
+        if not has_permission(current_user, "expenses", "team"):
             if expense.submitted_by != UUID(current_user.id):
                 raise HTTPException(status_code=403, detail="You can only view your own expenses")
         return expense

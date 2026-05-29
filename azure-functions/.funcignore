@@ -1,0 +1,22 @@
+# Exclude local Python virtual environments
+backend/.venv
+.venv
+**/.venv
+
+# Exclude Python cache
+**/__pycache__
+**/*.pyc
+**/*.pyo
+
+# Exclude test and migration files
+**/tests
+backend/alembic/versions
+
+# Exclude git/editor noise
+.git
+.gitignore
+.vscode
+*.md
+
+# Exclude local settings (env vars live in Azure portal)
+local.settings.json

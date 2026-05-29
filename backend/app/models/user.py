@@ -1,9 +1,9 @@
+import sqlalchemy as sa
 import enum
 import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, String, func
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -26,7 +26,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+        sa.Uuid(),
         primary_key=True,
         default=uuid.uuid4,
     )
@@ -41,7 +41,7 @@ class User(Base):
         nullable=False,
     )
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    azure_ad_id: Mapped[str | None] = mapped_column(String(200), unique=True, nullable=True)
+    azure_ad_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

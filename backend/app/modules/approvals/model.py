@@ -1,10 +1,10 @@
+import sqlalchemy as sa
 import enum
 import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy import event
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -32,13 +32,13 @@ class SignatureType(str, enum.Enum):
 class ApprovalLog(Base):
     __tablename__ = "approval_logs"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(), primary_key=True, default=uuid.uuid4)
 
     module:  Mapped[ApprovalModule] = mapped_column(Enum(ApprovalModule), nullable=False)
-    ref_id:  Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    ref_id:  Mapped[uuid.UUID]      = mapped_column(sa.Uuid(), nullable=False, index=True)
 
     actor_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False,
+        sa.Uuid(), ForeignKey("users.id"), nullable=False,
     )
 
     action:         Mapped[ApprovalAction] = mapped_column(Enum(ApprovalAction), nullable=False)

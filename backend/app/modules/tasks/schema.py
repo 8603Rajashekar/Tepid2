@@ -1,16 +1,19 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.modules.tasks.model import TaskPriority, TaskStatus, TaskType
+
+_TERMINAL = {TaskStatus.approved, TaskStatus.rejected}
 
 
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=200)
     description: Optional[str] = Field(None, max_length=2000)
-    assigned_to: UUID
+    assigned_to: Optional[UUID] = None          # primary assignee
+    assigned_to_ids: list[UUID] = Field(default_factory=list)  # multiple assignees
     priority: TaskPriority = TaskPriority.normal
     task_type: TaskType = TaskType.other
     due_date: Optional[datetime] = None
@@ -21,6 +24,14 @@ class TaskCreate(BaseModel):
         if v is not None and v <= datetime.utcnow():
             raise ValueError("due_date must be in the future")
         return v
+
+    @model_validator(mode="after")
+    def at_least_one_assignee(self) -> "TaskCreate":
+        if not self.assigned_to and not self.assigned_to_ids:
+            raise ValueError("Provide at least one assignee (assigned_to or assigned_to_ids)")
+        if not self.assigned_to and self.assigned_to_ids:
+            self.assigned_to = self.assigned_to_ids[0]
+        return self
 
 
 class TaskUpdate(BaseModel):
@@ -39,8 +50,22 @@ class TaskUpdate(BaseModel):
         return v
 
 
+class TaskSubmit(BaseModel):
+    remarks: str = Field(..., min_length=3, max_length=2000,
+                         description="Required remarks about the completed work")
+
+
 class TaskAssign(BaseModel):
-    assigned_to: UUID
+    assigned_to: Optional[UUID] = None
+    assigned_to_ids: list[UUID] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def at_least_one_assignee(self) -> "TaskAssign":
+        if not self.assigned_to and not self.assigned_to_ids:
+            raise ValueError("Provide at least one assignee")
+        if not self.assigned_to and self.assigned_to_ids:
+            self.assigned_to = self.assigned_to_ids[0]
+        return self
 
 
 class TaskReject(BaseModel):
@@ -100,11 +125,26 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    co_assignees: Optional[list] = None
+    submission_remarks: Optional[str] = None
+
     # Enriched display fields — populated by the router/service, not stored in DB
     assigned_to_name: Optional[str] = None
     created_by_name: Optional[str] = None
     assigned_to_role: Optional[str] = None
     created_by_role: Optional[str] = None
+    co_assignee_names: Optional[list] = None
+
+    # Computed — not stored in DB
+    is_overdue: bool = False
+
+    @model_validator(mode="after")
+    def compute_overdue(self) -> "TaskResponse":
+        if self.due_date and self.status not in _TERMINAL:
+            now = datetime.now(timezone.utc)
+            due = self.due_date if self.due_date.tzinfo else self.due_date.replace(tzinfo=timezone.utc)
+            self.is_overdue = due < now
+        return self
 
     class Config:
         from_attributes = True

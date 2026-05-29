@@ -10,13 +10,14 @@ import EmployeeDashboard from "./pages/EmployeeDashboard";
 import CRMDashboard      from "./pages/CRMDashboard";
 import Tasks             from "./pages/Tasks";
 import ServiceCalls  from "./pages/ServiceCalls";
-import WorkDashboard from "./pages/WorkDashboard";
 import CreateReport  from "./pages/CreateReport";
 import Documents     from "./pages/Documents";
 import Expenses      from "./pages/Expenses";
 import Approvals     from "./pages/Approvals";
 import CRM           from "./pages/CRM";
 import Users         from "./pages/Users";
+import Profile        from "./pages/Profile";
+import WorkReportsPage from "./pages/WorkReportsPage";
 
 // Role sets for route guards
 const FULL_ACCESS    = new Set(["admin", "super_admin", "supervisor", "coordinator", "service_coordinator", "crm"]);
@@ -43,7 +44,7 @@ export default function App() {
     <Layout role={role} onLogout={handleLogout}>{page}</Layout>
   );
 
-  const isEmployee = role === "employee" || role === "agent" || !FULL_ACCESS.has(role);
+  const isEmployee = role === "employee" || role === "agent";
   const isCRM      = role === "crm";
   const isFinance  = role === "finance" || role === "finance_officer";
   const homeRoute  = "/";
@@ -57,13 +58,9 @@ export default function App() {
             element={
               isCRM
                 ? wrap(<CRMDashboard />)
-                : isFinance
-                ? wrap(<Tasks />)
                 : isEmployee
                 ? wrap(<EmployeeDashboard />)
-                : FULL_ACCESS.has(role)
-                ? wrap(<Dashboard />)
-                : <Navigate to="/tasks" replace />
+                : wrap(<Dashboard />)
             }
           />
 
@@ -86,8 +83,8 @@ export default function App() {
           {/* Documents — all roles */}
           <Route path="/documents" element={wrap(<Documents />)} />
 
-          {/* Work Reports */}
-          <Route path="/work-reports" element={wrap(<WorkDashboard />)} />
+          {/* Work Reports — all roles */}
+          <Route path="/work-reports" element={wrap(<WorkReportsPage />)} />
           <Route path="/report"       element={wrap(<CreateReport />)} />
 
           {/* CRM — admin / super_admin / crm agent only */}
@@ -99,6 +96,9 @@ export default function App() {
           <Route path="/users"
             element={["admin", "super_admin", "supervisor"].includes(role) ? wrap(<Users />) : <Navigate to={homeRoute} replace />}
           />
+
+          {/* Profile — all authenticated users */}
+          <Route path="/profile" element={wrap(<Profile />)} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to={homeRoute} replace />} />

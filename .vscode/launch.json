@@ -1,18 +1,35 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Attach to Python Functions",
-            "type": "debugpy",
-            "request": "attach",
-            "connect": {
-                "host": "localhost",
-                "port": 9091
-            },
-            "preLaunchTask": "func: host start"
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+
+    // ─── Backend: launch uvicorn with debugger attached ───────────────────────
+    // Requires: ms-python.debugpy extension
+    {
+      "name": "🐍 Debug Backend (uvicorn)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      },
+      "jinja": true,
+      "justMyCode": true,
+      "python": "${workspaceFolder}/backend/.venv/Scripts/python.exe"
+    },
+
+    // ─── Backend: attach to Azure Functions host (port 9091) ─────────────────
+    {
+      "name": "⚡ Debug Backend (Azure Functions)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 9091
+      },
+      "preLaunchTask": "Backend: func host start"
+    }
+
+  ]
 }

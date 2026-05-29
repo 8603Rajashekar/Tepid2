@@ -7,8 +7,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+import os as _os
+# On Azure Linux the wwwroot directory is read-only — use /tmp instead
+if _os.name == "nt":
+    UPLOAD_DIR = Path(__file__).resolve().parents[4] / "uploads"
+else:
+    UPLOAD_DIR = Path("/tmp/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv",
                       ".jpg", ".jpeg", ".png", ".gif", ".zip", ".txt"}

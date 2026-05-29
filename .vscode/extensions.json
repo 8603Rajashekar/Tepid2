@@ -1,6 +1,25 @@
 {
   "recommendations": [
+    // Python
+    "ms-python.python",
+    "ms-python.debugpy",
+    "ms-python.vscode-pylance",
+
+    // Azure
     "ms-azuretools.vscode-azurefunctions",
-    "ms-python.python"
+    "ms-azuretools.vscode-azurestaticwebapps",
+
+    // Frontend / React
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "dsznajder.es7-react-js-snippets",
+
+    // Mobile / Expo
+    "expo.vscode-expo-tools",
+
+    // General
+    "eamodio.gitlens",
+    "christian-kohler.path-intellisense",
+    "streetsidesoftware.code-spell-checker"
   ]
 }

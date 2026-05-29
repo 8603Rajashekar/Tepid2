@@ -3,8 +3,10 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis,
 } from "recharts";
+import { PhoneOutgoing, PhoneIncoming, Phone } from "lucide-react";
 import api from "../api/api";
 import { useToast } from "../context/ToastContext";
+import CallModal from "../components/CallModal";
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -46,6 +48,7 @@ const BLANK_FORM = {
   quantity: "", amount: "", special_requirements: "",
   question: "", response_given: "",
   follow_up_date: "",
+  direction: "outbound",
 };
 
 const BLANK_REPORT = {
@@ -406,6 +409,7 @@ export default function CRM() {
   const [editCall,     setEditCall]     = useState(null);
   const [acting,       setActing]       = useState(null);
   const [form,         setForm]         = useState({ ...BLANK_FORM });
+  const [activeCall,   setActiveCall]   = useState(null);  // call record for CallModal
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -665,6 +669,31 @@ export default function CRM() {
             ))}
           </div>
 
+          {/* Inbound / Outbound direction toggle */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-2">Call Direction</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button"
+                onClick={() => set("direction", "outbound")}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition ${
+                  form.direction === "outbound"
+                    ? "bg-blue-600 text-white border-blue-600 shadow"
+                    : "bg-slate-50 text-slate-600 border-slate-200 hover:border-blue-300"
+                }`}>
+                <PhoneOutgoing size={14} /> Outbound
+              </button>
+              <button type="button"
+                onClick={() => set("direction", "inbound")}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition ${
+                  form.direction === "inbound"
+                    ? "bg-green-600 text-white border-green-600 shadow"
+                    : "bg-slate-50 text-slate-600 border-slate-200 hover:border-green-300"
+                }`}>
+                <PhoneIncoming size={14} /> Inbound
+              </button>
+            </div>
+          </div>
+
           {/* Company details — first row */}
           <div className="grid grid-cols-2 gap-3">
             <Input label="Company Name" placeholder="e.g. Acme Pvt Ltd"
@@ -740,12 +769,24 @@ export default function CRM() {
 
                 {/* Top row */}
                 <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-base">{typeInfo?.icon}</span>
                       <p className="font-semibold text-slate-800">{call.customer_name}</p>
                       <Badge cls={STATUS_BADGE[call.status]}>{call.status.replace("_", " ")}</Badge>
                       <Badge cls={PRIORITY_BADGE[call.priority]}>{call.priority}</Badge>
+                      {/* Direction badge */}
+                      {call.direction && (
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border font-semibold ${
+                          call.direction === "inbound"
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-blue-50 text-blue-700 border-blue-200"
+                        }`}>
+                          {call.direction === "inbound"
+                            ? <><PhoneIncoming size={10} /> Inbound</>
+                            : <><PhoneOutgoing size={10} /> Outbound</>}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {call.company_name && <span className="font-medium text-slate-500">🏢 {call.company_name} · </span>}
@@ -754,9 +795,19 @@ export default function CRM() {
                       <span className="ml-2">{new Date(call.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
                     </p>
                   </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full border font-semibold flex-shrink-0 ${TYPE_COLOR[typeInfo?.color]}`}>
-                    {typeInfo?.label}
-                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Quick Call button */}
+                    <button
+                      onClick={() => setActiveCall(call)}
+                      title="Start call"
+                      className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition shadow-sm"
+                    >
+                      <Phone size={12} /> Call
+                    </button>
+                    <span className={`text-xs px-2.5 py-1 rounded-full border font-semibold ${TYPE_COLOR[typeInfo?.color]}`}>
+                      {typeInfo?.label}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Details */}
@@ -785,6 +836,31 @@ export default function CRM() {
                     {isFollowupDue ? "🔔 Follow-up overdue:" : "📅 Follow-up:"}{" "}
                     {new Date(call.follow_up_date).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </p>
+                )}
+
+                {/* Call log summary */}
+                {(call.call_outcome || call.call_duration_seconds) && (
+                  <div className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2 mb-2 text-xs flex-wrap">
+                    {call.call_duration_seconds != null && (
+                      <span className="flex items-center gap-1 text-slate-500">
+                        <Phone size={11} />
+                        {Math.floor(call.call_duration_seconds / 60)}m {call.call_duration_seconds % 60}s
+                      </span>
+                    )}
+                    {call.call_outcome && (
+                      <span className={`flex items-center gap-1 font-semibold capitalize px-2 py-0.5 rounded-full border ${
+                        call.call_outcome === "resolved" ? "bg-green-50 text-green-700 border-green-200" :
+                        call.call_outcome === "no_answer" ? "bg-slate-100 text-slate-500 border-slate-200" :
+                        call.call_outcome === "follow_up" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                        "bg-orange-50 text-orange-700 border-orange-200"
+                      }`}>
+                        {call.call_outcome.replace(/_/g, " ")}
+                      </span>
+                    )}
+                    {call.call_notes && (
+                      <span className="text-slate-500 italic truncate max-w-xs">"{call.call_notes}"</span>
+                    )}
+                  </div>
                 )}
 
                 {/* Action buttons */}
@@ -825,6 +901,15 @@ export default function CRM() {
         </div>
       )}
       </>)}
+
+      {/* ── Active Call Modal ── */}
+      {activeCall && (
+        <CallModal
+          call={activeCall}
+          onClose={() => setActiveCall(null)}
+          onSaved={() => { setActiveCall(null); load(); }}
+        />
+      )}
 
     </div>
   );

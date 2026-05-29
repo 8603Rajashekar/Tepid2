@@ -4,6 +4,7 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import api from "../api/api";
+import GreetingBanner from "../components/GreetingBanner";
 
 // ── Constants ────────────────────────────────────────────────────────────
 const CALL_TYPES = [
@@ -159,11 +160,14 @@ export default function CRMDashboard() {
   return (
     <div className="space-y-7">
 
+      {/* ── GREETING ── */}
+      <GreetingBanner />
+
       {/* ── HEADER ── */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Welcome, {firstName} 👋</h1>
-          <p className="text-xs text-slate-400 mt-0.5">CRM Agent Dashboard · Today's overview</p>
+          <h1 className="text-2xl font-bold text-slate-800">CRM Dashboard</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Today's overview</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Link to="/crm"

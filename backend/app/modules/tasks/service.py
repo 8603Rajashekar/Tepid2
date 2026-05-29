@@ -18,6 +18,7 @@ from app.modules.tasks.schema import (
     TaskCreate,
     TaskReject,
     TaskStatusUpdate,
+    TaskSubmit,
     TaskUpdate,
 )
 
@@ -138,10 +139,14 @@ class TaskService:
         await _ensure_assignment_allowed(db, current_user, data.assigned_to)
         assigned_at = datetime.now(UTC)
 
+        # Build co_assignees list (additional assignees beyond primary)
+        extra_ids = [str(uid) for uid in data.assigned_to_ids if uid != data.assigned_to]
+
         task = Task(
             title=data.title,
             description=data.description,
             assigned_to=data.assigned_to,
+            co_assignees=extra_ids if extra_ids else None,
             created_by=current_user_id,
             priority=data.priority,
             task_type=data.task_type,
@@ -169,6 +174,19 @@ class TaskService:
             )
             await create_notification(task.assigned_to, f"📋 New task assigned: {task.title}")
 
+        # Notify each co-assignee individually
+        for uid_str in (task.co_assignees or []):
+            try:
+                await create_notification(UUID(uid_str), f"📋 You are also assigned to task: {task.title}")
+            except Exception:
+                pass
+
+        # Notify admins for visibility
+        await notify_role(
+            ["admin", "super_admin"],
+            f"📋 New task created: '{task.title}' assigned by {current_user.email}",
+        )
+
         return task
 
     # ------------------------------------------------------------------
@@ -193,6 +211,8 @@ class TaskService:
         prev_assignee = task.assigned_to
         now = datetime.now(UTC)
         task.assigned_to = data.assigned_to
+        extra_ids = [str(uid) for uid in data.assigned_to_ids if uid != data.assigned_to]
+        task.co_assignees = extra_ids if extra_ids else None
         task.status = TaskStatus.assigned
         task.assigned_at = now
         task.updated_at = now
@@ -214,6 +234,19 @@ class TaskService:
         )
         await create_notification(data.assigned_to, f"📋 Task assigned to you: {task.title}")
 
+        # Notify each co-assignee individually
+        for uid_str in (task.co_assignees or []):
+            try:
+                await create_notification(UUID(uid_str), f"📋 You are also assigned to task: {task.title}")
+            except Exception:
+                pass
+
+        # Notify admins for visibility
+        await notify_role(
+            ["admin", "super_admin"],
+            f"📋 Task '{task.title}' assigned to {data.assigned_to} by {current_user.email}",
+        )
+
         return await TaskRepository.update(db, task)
 
     # ------------------------------------------------------------------
@@ -227,8 +260,9 @@ class TaskService:
         _validate_transition(task.status, TaskStatus.in_progress)
 
         current_user_id = UUID(current_user.id)
-        if task.assigned_to != current_user_id:
-            raise HTTPException(status_code=403, detail="Only the assigned employee can start this task")
+        co = [UUID(x) for x in (task.co_assignees or [])]
+        if task.assigned_to != current_user_id and current_user_id not in co:
+            raise HTTPException(status_code=403, detail="Only an assigned employee can start this task")
 
         now = datetime.now(UTC)
         task.status     = TaskStatus.in_progress
@@ -248,14 +282,17 @@ class TaskService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def submit_task(db: AsyncSession, task_id: UUID, current_user: TokenUser) -> Task:
+    async def submit_task(
+        db: AsyncSession, task_id: UUID, current_user: TokenUser, data: TaskSubmit,
+    ) -> Task:
         check_permission(current_user, "tasks", "own")
         task = await _fetch(db, task_id)
         _validate_transition(task.status, TaskStatus.pending_review)
 
         current_user_id = UUID(current_user.id)
-        if task.assigned_to != current_user_id:
-            raise HTTPException(status_code=403, detail="Only the assigned employee can submit this task")
+        co = [UUID(x) for x in (task.co_assignees or [])]
+        if task.assigned_to != current_user_id and current_user_id not in co:
+            raise HTTPException(status_code=403, detail="Only an assigned employee can submit this task")
 
         completed_at = datetime.now(UTC)
         delay_minutes, efficiency_score = _compute_efficiency(task, completed_at)
@@ -273,6 +310,7 @@ class TaskService:
         task.time_spent_minutes = time_spent_minutes
         task.delay_minutes      = delay_minutes
         task.efficiency_score   = efficiency_score
+        task.submission_remarks = data.remarks
         task.updated_at         = completed_at
 
         await AuditLogService.log(
@@ -286,7 +324,7 @@ class TaskService:
         )
         result = await TaskRepository.update(db, task)
 
-        # Notify creator + all admins: task is awaiting their review
+        # Notify only the task creator (specific) and admins — not all supervisors
         if task.created_by and task.created_by != current_user_id:
             await create_notification(
                 task.created_by,
@@ -310,13 +348,14 @@ class TaskService:
         task = await _fetch(db, task_id)
 
         current_user_id = UUID(current_user.id)
-        is_admin = current_user.role in ("admin", "super_admin")
-        is_creator = task.created_by == current_user_id
+        is_admin      = current_user.role in ("admin", "super_admin")
+        is_supervisor = current_user.role == "supervisor"
+        is_creator    = task.created_by == current_user_id
 
-        if not is_admin and not is_creator:
+        if not is_admin and not is_supervisor and not is_creator:
             raise HTTPException(
                 status_code=403,
-                detail="Only the person who assigned this task (or an admin) can approve it",
+                detail="Only a supervisor, admin, or the task creator can approve tasks",
             )
 
         _validate_transition(task.status, TaskStatus.approved)
@@ -354,13 +393,14 @@ class TaskService:
         task = await _fetch(db, task_id)
 
         current_user_id = UUID(current_user.id)
-        is_admin = current_user.role in ("admin", "super_admin")
-        is_creator = task.created_by == current_user_id
+        is_admin      = current_user.role in ("admin", "super_admin")
+        is_supervisor = current_user.role == "supervisor"
+        is_creator    = task.created_by == current_user_id
 
-        if not is_admin and not is_creator:
+        if not is_admin and not is_supervisor and not is_creator:
             raise HTTPException(
                 status_code=403,
-                detail="Only the person who assigned this task (or an admin) can reject it",
+                detail="Only a supervisor, admin, or the task creator can reject tasks",
             )
 
         _validate_transition(task.status, TaskStatus.rejected)

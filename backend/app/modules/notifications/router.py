@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user
@@ -44,6 +44,21 @@ async def mark_read(
     await db.commit()
     await db.refresh(notif)
     return notif
+
+
+@router.get("/unread-count")
+async def unread_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: TokenUser = Depends(get_current_user),
+):
+    """Return the count of unread notifications for the bell badge."""
+    count = await db.scalar(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.user_id == UUID(current_user.id))
+        .where(Notification.is_read == False)  # noqa: E712
+    )
+    return {"unread": count or 0}
 
 
 @router.post("/read-all", status_code=204)

@@ -68,9 +68,9 @@ class ServiceCallService:
         )
         await db.commit()
 
-        # Notify admins + supervisors: new service call needs assignment
+        # Notify admins and service coordinators — not all supervisors
         await notify_role(
-            ["admin", "super_admin", "supervisor"],
+            ["admin", "super_admin", "service_coordinator", "coordinator"],
             f"📞 New service call: '{call.title}' [{call.priority} priority] by {current_user.email}",
         )
         return _enrich(call)
@@ -126,9 +126,10 @@ class ServiceCallService:
         )
         await db.commit()
 
-        await NotificationService.send_sms(
-            phone=str(data.assigned_to),
-            message=f"[Field Ops] You have been assigned service call: '{call.title}' (Priority: {call.priority})",
+        # Notify the specific assigned technician
+        await create_notification(
+            data.assigned_to,
+            f"📞 Service call assigned to you: '{call.title}' [{call.priority} priority]",
         )
         return _enrich(call)
 
@@ -202,9 +203,9 @@ class ServiceCallService:
         )
         await db.commit()
 
-        # Notify admins + supervisors: call resolved, ready to close
+        # Notify admins and coordinators: call resolved, ready to close
         await notify_role(
-            ["admin", "super_admin", "supervisor"],
+            ["admin", "super_admin", "service_coordinator", "coordinator"],
             f"✅ Service call resolved: '{call.title}' — ready to close",
         )
         return _enrich(call)

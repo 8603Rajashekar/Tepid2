@@ -156,18 +156,24 @@ async def dashboard_overview(
             "scope":             "service_coordinator",
         }
 
-    # ── Finance Officer — focus on expenses ────────────────────────────
-    if role == "finance_officer":
+    # ── Finance / Finance Officer — focus on expenses ─────────────────
+    if role in ("finance", "finance_officer"):
         expenses  = await _expense_counts(db, pending_statuses=[ExpenseStatus.submitted, ExpenseStatus.supervisor_approved])
         approvals = await _approval_counts(db, role)
-        tasks     = await _task_counts(db)
+        tasks     = await _task_counts(db, user_id=uid)
+        # Count expenses sitting at finance_approved (waiting for admin final approval)
+        finance_approved_count = await _count(
+            db,
+            select(func.count()).select_from(Expense).where(Expense.status == ExpenseStatus.finance_approved),
+        )
         return {
             **expenses,
             **approvals,
             **tasks,
+            "finance_approved_count": finance_approved_count,
             "active_calls": None,
             "sla_risks":    None,
-            "scope":        "finance_officer",
+            "scope":        "finance",
         }
 
     # ── Supervisor — team approvals + calls ────────────────────────────
@@ -247,8 +253,8 @@ async def employee_dashboard(
         .where(Expense.submitted_by == uid)
         .where(Expense.created_at >= since)
         .where(Expense.status.in_([ExpenseStatus.admin_approved, ExpenseStatus.reimbursed]))
-        .group_by("yr", "mo")
-        .order_by("yr", "mo")
+        .group_by(extract("year", Expense.created_at), extract("month", Expense.created_at))
+        .order_by(extract("year", Expense.created_at), extract("month", Expense.created_at))
     )
     MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]

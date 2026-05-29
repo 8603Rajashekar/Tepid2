@@ -15,6 +15,7 @@ from app.modules.tasks.schema import (
     TaskReject,
     TaskResponse,
     TaskStatusUpdate,
+    TaskSubmit,
     TaskUpdate,
 )
 from app.modules.tasks.service import TaskService
@@ -34,13 +35,17 @@ def _canonical_role(role: UserRole) -> str:
 
 
 async def _enrich(tasks, db: AsyncSession) -> list[TaskResponse]:
-    """Attach assigned_to_name and created_by_name to a list of task ORM objects."""
-    # Collect all UUIDs we need to look up
+    """Attach name/role fields for all assignees and creator."""
     ids = set()
     for t in tasks:
         if t.assigned_to:
             ids.add(t.assigned_to)
         ids.add(t.created_by)
+        for uid_str in (t.co_assignees or []):
+            try:
+                ids.add(UUID(uid_str))
+            except Exception:
+                pass
 
     user_map: dict[UUID, tuple[str, str]] = {}
     if ids:
@@ -56,6 +61,12 @@ async def _enrich(tasks, db: AsyncSession) -> list[TaskResponse]:
         resp.assigned_to_role = assigned_to[1] if assigned_to else None
         resp.created_by_name = created_by[0] if created_by else None
         resp.created_by_role = created_by[1] if created_by else None
+        if t.co_assignees:
+            resp.co_assignee_names = [
+                user_map[UUID(uid_str)][0]
+                for uid_str in t.co_assignees
+                if uid_str and UUID(uid_str) in user_map
+            ]
         results.append(resp)
     return results
 
@@ -186,11 +197,12 @@ async def start_task(
 @router.post("/{task_id}/submit", response_model=TaskResponse)
 async def submit_task(
     task_id: UUID,
+    data: TaskSubmit,
     db: AsyncSession = Depends(get_db),
     current_user: TokenUser = Depends(get_current_user),
 ):
-    """Employee submits completed work for review. Calculates efficiency score. (in_progress → pending_review)"""
-    task = await TaskService.submit_task(db, task_id, current_user)
+    """Employee submits completed work with remarks. (in_progress → pending_review)"""
+    task = await TaskService.submit_task(db, task_id, current_user, data)
     enriched = await _enrich([task], db)
     return enriched[0]
 
