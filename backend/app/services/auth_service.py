@@ -134,7 +134,12 @@ class AuthService:
 
         template = settings.SMS_OTP_TEMPLATE_TEXT or "Your OTP is {otp}"
         message = template.replace("{#var#}", otp).replace("{otp}", otp)
-        await NotificationService.send_sms(phone=mobile, message=message)
+        sms_ok, sms_detail = await NotificationService.send_sms(phone=mobile, message=message)
+        if not sms_ok:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"OTP generated but SMS delivery failed: {sms_detail}",
+            )
 
         return OtpRequestResponse(
             message="OTP sent successfully",
