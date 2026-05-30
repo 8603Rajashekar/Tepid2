@@ -31,6 +31,7 @@ from app.modules.work_reports.model import WorkReport  # noqa: F401
 from app.modules.approvals.model import ApprovalLog  # noqa: F401
 from app.modules.notifications.model import Notification  # noqa: F401
 from app.modules.crm.model import CRMCall  # noqa: F401
+from app.modules.auth.model import LoginOtp  # noqa: F401
 
 target_metadata = Base.metadata
 
