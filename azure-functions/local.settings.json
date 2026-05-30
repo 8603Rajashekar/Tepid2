@@ -2,6 +2,18 @@
   "IsEncrypted": false,
   "Values": {
     "FUNCTIONS_WORKER_RUNTIME": "python",
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true"
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "OTP_LENGTH": "6",
+    "OTP_EXPIRY_MINUTES": "5",
+    "OTP_MAX_ATTEMPTS": "5",
+    "OTP_RESEND_COOLDOWN_SECONDS": "30",
+    "SMS_PROVIDER": "smslogin",
+    "SMS_API_BASE_URL": "https://smslogin.co/v3/api.php",
+    "SMS_USERNAME": "TEPID",
+    "SMS_API_KEY": "2065b3290f015c64ffa1",
+    "SMS_SENDER_ID": "TEPDIN",
+    "SMS_DLT_ENTITY_ID": "REPLACE_WITH_DLT_ENTITY_ID",
+    "SMS_DLT_TEMPLATE_ID_OTP": "1707177728442157180",
+    "SMS_OTP_TEMPLATE_TEXT": "Your OTP is {#var#}. Enter this code to confirm your registration to device alerts - TEPID INDUSTRIES PRIVATE LIMITED."
   }
 }

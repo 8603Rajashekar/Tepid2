@@ -1,4 +1,6 @@
 import os
+import urllib.parse
+import urllib.request
 from uuid import UUID
 
 from app.modules.notifications.model import Notification
@@ -78,6 +80,34 @@ class NotificationService:
 
     @staticmethod
     async def send_sms(phone: str, message: str) -> None:
+        provider = os.getenv("SMS_PROVIDER", "").strip().lower()
+        if provider == "smslogin":
+            base_url = os.getenv("SMS_API_BASE_URL", "https://smslogin.co/v3/api.php")
+            username = os.getenv("SMS_USERNAME", "")
+            api_key = os.getenv("SMS_API_KEY", "")
+            sender_id = os.getenv("SMS_SENDER_ID", "")
+            dlt_entity_id = os.getenv("SMS_DLT_ENTITY_ID", "")
+            template_id = os.getenv("SMS_DLT_TEMPLATE_ID_OTP", "")
+            if username and api_key and sender_id:
+                try:
+                    params = {
+                        "username": username,
+                        "apikey": api_key,
+                        "mobile": phone,
+                        "senderid": sender_id,
+                        "message": message,
+                    }
+                    if dlt_entity_id and dlt_entity_id != "REPLACE_WITH_DLT_ENTITY_ID":
+                        params["entityid"] = dlt_entity_id
+                    if template_id and template_id != "REPLACE_WITH_DLT_TEMPLATE_ID_OTP":
+                        params["templateid"] = template_id
+                    url = f"{base_url}?{urllib.parse.urlencode(params)}"
+                    with urllib.request.urlopen(url, timeout=15) as resp:
+                        resp.read()
+                    return
+                except Exception as exc:
+                    print(f"[NotificationService] smslogin error: {exc}")
+
         sid   = os.getenv("TWILIO_SID")
         token = os.getenv("TWILIO_TOKEN")
         from_number = os.getenv("TWILIO_FROM")

@@ -30,6 +30,13 @@ class UserRepository:
         return result.scalar_one_or_none()
 
     @staticmethod
+    async def get_by_phone(db: AsyncSession, phone: str) -> User | None:
+        result = await db.execute(
+            select(User).where(User.phone == phone)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
     async def create(db: AsyncSession, user: User) -> User:
         db.add(user)
         await db.commit()

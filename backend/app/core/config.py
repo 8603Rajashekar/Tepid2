@@ -40,6 +40,23 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "dev-secret-change-in-production"
     JWT_ALGORITHM: str = "HS256"
 
+    OTP_LENGTH: int = 6
+    OTP_EXPIRY_MINUTES: int = 5
+    OTP_MAX_ATTEMPTS: int = 5
+    OTP_RESEND_COOLDOWN_SECONDS: int = 30
+
+    SMS_PROVIDER: str = "smslogin"
+    SMS_API_BASE_URL: str = "https://smslogin.co/v3/api.php"
+    SMS_USERNAME: str = "TEPID"
+    SMS_API_KEY: str = "2065b3290f015c64ffa1"
+    SMS_SENDER_ID: str = "TEPDIN"
+    SMS_DLT_ENTITY_ID: str = "REPLACE_WITH_DLT_ENTITY_ID"
+    SMS_DLT_TEMPLATE_ID_OTP: str = "1707177728442157180"
+    SMS_OTP_TEMPLATE_TEXT: str = (
+        "Your OTP is {#var#}. Enter this code to confirm your registration to device alerts - "
+        "TEPID INDUSTRIES PRIVATE LIMITED."
+    )
+
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",
